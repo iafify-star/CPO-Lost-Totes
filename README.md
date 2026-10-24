@@ -1,0 +1,36 @@
+# CPO والتوتات الضايعة
+
+موقع static بيقرا شيت **[WH] Daily CPO EG** وشيت **pending_dispatching** ويربطهم ببعض.
+
+- **الداش بورد:** الـ Missing والـ Damage والـ Excess وCPO وBox Lost وWrong Connection، باليوم وبالمخزن وبالفرع وبالكاتيجوري، وأنواع الـ Missing من تاب MTD Item level.
+- **التوتات الضايعة:** كل توتة Box Lost في الفترة، وجنبها الدليل اللي اتلقى عليها (سكان الـ Review، سكان الفروع، الـ Excess، الأصناف اللي اتلقت في فرع تاني، والتوتة لو رجعت اتشغلت تاني).
+- **اللغة:** زرار فوق بيقلب الموقع بين العربي والإنجليزي، والموقع بيفتكر اختيارك على نفس الجهاز.
+- **البحث:** بالتوتة (`TGI…` أو `PH…`، بالـ `_vNN` أو من غيره)، أو بالتحويل (`TR-…`)، أو بالبالتة (`FPI…`).
+
+## الداتا جاية منين
+
+| الشيت | التابات | إزاي |
+|---|---|---|
+| [WH] Daily CPO EG | Tote Missing، Missing، Wrong Connection، MTD Item level، Summary | عن طريق Apps Script (`google-apps-script.gs`)، لأن الشيت مش public |
+| pending_dispatching | dispatching، pallet_scan، dispatching_history | CSV مباشرة من المتصفح (الشيت public) |
+
+## التشغيل أول مرة
+
+1. افتح [script.google.com](https://script.google.com) ← New project، وامسح اللي فيه والزق محتوى `google-apps-script.gs`، وSave.
+2. من القايمة اللي فوق جنب زرار Run اختار **installTrigger** ودوس **Run**، ووافق على الصلاحيات (قراية الشيتات، وملف في الـ Drive، والتشغيل كل ساعة). هياخد دقيقة أو اتنين.
+3. Deploy ← New deployment ← اختار **Web app**.
+   - Execute as: **Me**
+   - Who has access: **Anyone**
+4. انسخ الرابط اللي آخره `/exec` وحطه في `config.js` مكان `API_URL`.
+5. افتح `index.html` من أي استضافة static (GitHub Pages أو Vercel).
+
+أي تعديل في `google-apps-script.gs` مش بيتطبق غير لما تعمل Deploy ← Manage deployments ← Edit ← Version: **New version** (الرابط بيفضل زي ما هو).
+
+## ملاحظات
+
+- قراية شيت CPO بتاخد دقيقة ونص تقريباً، فالاسكربت بيقراه مرة كل ساعة ويحفظ نسخة مضغوطة في الـ Drive بتاعك (ملف اسمه `CPO site snapshot`)، والموقع بيقرا من النسخة دي فبيرجع في ثواني. ماتمسحش الملف ده.
+- النسخة فيها آخر 62 يوم بس، عشان حجم الملف يفضل تحت حد الـ Drive.
+- زرار **تحديث من الشيت** بيخلي الاسكربت يقرا الشيت من الأول حالاً (دقيقتين تقريباً).
+- `?action=status` على رابط الاسكربت بيقولك النسخة اتعملت إمتى وكل تاب خد قد إيه.
+- شيت pending_dispatching فيه بالتات CAIID01 بس (وشوية CAIID02 وCAIID06)، وبدأ يوم 19/10. فتوتات المخازن التانية مالهاش سكان قبل الخروج.
+- مواعيد Wrong Connection في الشيت UTC، والموقع بيعرضها بتوقيت القاهرة.

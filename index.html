@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>noon Minutes · CPO والتوتات الضايعة</title>
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Poppins:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <img class="logo" src="assets/noon-minutes.png" alt="noon Minutes">
+    <div class="brand">
+      <h1 data-i18n="appTitle">CPO والتوتات الضايعة</h1>
+      <div class="meta" id="meta" data-i18n="loading">بيحمّل الداتا…</div>
+    </div>
+    <button class="lang" id="lang" lang="en">English</button>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="dash" aria-selected="true" data-i18n="tabDash">الداش بورد</button>
+    <button class="tab" role="tab" data-tab="lost" aria-selected="false" data-i18n="tabLost">التوتات الضايعة</button>
+  </nav>
+</header>
+
+<section class="filters" aria-label="period">
+  <div class="filters-in">
+    <div class="presets" id="presets">
+      <button data-preset="day" data-i18n="presetDay">آخر يوم</button>
+      <button data-preset="week" data-i18n="presetWeek">آخر 7 أيام</button>
+      <button data-preset="month" data-i18n="presetMonth">من أول الشهر</button>
+    </div>
+    <label><span data-i18n="from">من</span> <input type="date" id="from"></label>
+    <label><span data-i18n="to">لـ</span> <input type="date" id="to"></label>
+    <button class="primary" id="apply" data-i18n="apply">اعرض</button>
+    <button id="refresh" data-i18n="refresh" data-i18n-title="refreshTitle">تحديث من الشيت</button>
+    <label class="wh-filter"><span data-i18n="whLabel">المخزن</span>
+      <select id="wh"></select>
+    </label>
+  </div>
+</section>
+
+<div id="notice" class="notice" hidden></div>
+
+<main>
+  <section id="tab-dash" class="panel">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2 data-i18n="trendTitle">الـ Missing والـ Damage والـ Excess باليوم</h2>
+        <button class="link" id="trend-table-btn"></button>
+      </div>
+      <div class="legend" id="trend-legend"></div>
+      <div class="chart" id="trend"></div>
+      <div id="trend-table" hidden></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <div class="card-head"><h2 data-i18n="byWh">بالمخزن</h2></div>
+        <div class="scroll" id="wh-table"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2 data-i18n="bucketsTitle">أنواع الـ Missing</h2><span class="hint" data-i18n="bucketsHint">من تاب MTD Item level</span></div>
+        <div class="scroll" id="bucket-table"></div>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <div class="card-head"><h2 data-i18n="byDs">بالفرع</h2><button class="link" id="ds-more"></button></div>
+        <div class="scroll" id="ds-table"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2 data-i18n="byCat">بالكاتيجوري</h2><button class="link" id="cat-more"></button></div>
+        <div class="scroll" id="cat-table"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-lost" class="panel" hidden>
+    <form class="search" id="search-form" autocomplete="off">
+      <input id="search" type="search" data-i18n-ph="searchPh" aria-label="search">
+      <button class="primary" type="submit" data-i18n="searchBtn">دوّر</button>
+    </form>
+    <div id="search-result"></div>
+
+    <div class="cats" id="cats"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2 id="lost-title"></h2>
+        <div class="row-gap">
+          <select id="lost-day"></select>
+          <select id="lost-ds"></select>
+          <button id="lost-csv" data-i18n="csv">تحميل CSV</button>
+        </div>
+      </div>
+      <div class="scroll" id="lost-table"></div>
+    </div>
+
+    <details class="card explain">
+      <summary data-i18n="explainTitle">إزاي بنقرا الأدلة</summary>
+      <div data-i18n-html="explainBody"></div>
+    </details>
+  </section>
+</main>
+
+<footer class="foot" data-i18n="footer"></footer>
+
+<div class="tooltip" id="tooltip" role="status" hidden></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
