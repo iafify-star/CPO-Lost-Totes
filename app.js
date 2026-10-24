@@ -73,7 +73,7 @@ const I18N = {
     allTotes: 'كل التوتات',
     lostTitle: 'التوتات اللي ضاعت بالكامل (Box Lost) من {from} لـ {to}',
     noTotes: 'مفيش توتات بالفلتر ده.',
-    lostHead: ['#', 'اليوم', 'CAIID', 'التوتة', 'رايحة فين', 'القطع', 'القيمة (ج)', 'لقينا إيه'],
+    lostHead: ['#', 'اليوم', 'CAIID', 'التوتة', 'رايحة فين', 'القطع', 'القيمة (ج)', 'لقينا إيه', 'المتابعة'],
     cat_red: 'فرع غلط', cat_red_t: 'راحت فرع غلط أو أصنافها اتلقت في فرع تاني',
     cat_amber: 'وصلت بأصناف تانية', cat_amber_t: 'وصلت فرعها بس جواها أصناف غير المطلوبة',
     cat_blue: 'وصلت والسكان فشل', cat_blue_t: 'وصلت فرعها والسكان فشل',
@@ -154,6 +154,14 @@ const I18N = {
     rpHead: ['#', 'CAIID', 'التوتة', 'رايحة فين', 'القطع', 'القيمة (ج)', 'لقينا إيه'],
     rpHeadRange: ['#', 'اليوم', 'CAIID', 'التوتة', 'رايحة فين', 'القطع', 'القيمة (ج)', 'لقينا إيه'],
     months: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'],
+    followCol: 'المتابعة', followAll: 'كل الحالات', followEdit: '✎ تحديث',
+    st_open: 'مفتوحة', st_investigating: 'بنحقق', st_found: 'اتلقت', st_charged: 'اتحاسب عليها', st_not_lost: 'مش ضايعة', st_closed: 'اتقفلت من غير ما تتلاقي',
+    followTitle: 'متابعة التوتة {tote}', followStatus: 'الحالة', followNote: 'ملاحظة',
+    followNotePh: 'إيه اللي حصل؟ اتكلمت مع مين؟ الأصناف راحت فين؟', followBy: 'اسمك',
+    followSave: 'حفظ', followCancel: 'إلغاء', followSaving: 'بيحفظ…', followNeedName: 'اكتب اسمك الأول',
+    followFail: 'ماتحفظتش: {e}', followHistory: 'اللي اتسجل قبل كدا', followNone: 'لسه محدش سجّل حاجة على التوتة دي.',
+    followUnsupported: 'المتابعة محتاجة تحديث الاسكربت (New version) عشان تشتغل.',
+    rpKeyFollow: 'المتابعة: {list}.',
   },
   en: {
     docTitle: 'noon Minutes · CPO & Lost Totes',
@@ -208,7 +216,7 @@ const I18N = {
     allTotes: 'All totes',
     lostTitle: 'Box Lost totes, {from} to {to}',
     noTotes: 'No totes match this filter.',
-    lostHead: ['#', 'Day', 'CAIID', 'Tote', 'Going to', 'Pieces', 'Value (EGP)', 'What we found'],
+    lostHead: ['#', 'Day', 'CAIID', 'Tote', 'Going to', 'Pieces', 'Value (EGP)', 'What we found', 'Follow-up'],
     cat_red: 'Wrong branch', cat_red_t: 'Went to the wrong branch, or its items turned up at another branch',
     cat_amber: 'Arrived with other items', cat_amber_t: 'Reached its branch, but with items other than the ones ordered',
     cat_blue: 'Arrived, scan failed', cat_blue_t: 'Reached its branch and the scan failed',
@@ -289,6 +297,14 @@ const I18N = {
     rpHead: ['#', 'CAIID', 'Tote', 'Going to', 'Pieces', 'Value (EGP)', 'What we found'],
     rpHeadRange: ['#', 'Day', 'CAIID', 'Tote', 'Going to', 'Pieces', 'Value (EGP)', 'What we found'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    followCol: 'Follow-up', followAll: 'All statuses', followEdit: '✎ Update',
+    st_open: 'Open', st_investigating: 'Investigating', st_found: 'Found', st_charged: 'Charged', st_not_lost: 'Not lost', st_closed: 'Closed, not found',
+    followTitle: 'Follow-up for {tote}', followStatus: 'Status', followNote: 'Note',
+    followNotePh: 'What happened? Who did you talk to? Where did the items go?', followBy: 'Your name',
+    followSave: 'Save', followCancel: 'Cancel', followSaving: 'Saving…', followNeedName: 'Type your name first',
+    followFail: 'Not saved: {e}', followHistory: 'History', followNone: 'Nothing recorded for this tote yet.',
+    followUnsupported: 'Follow-up needs the updated Apps Script (New version) to work.',
+    rpKeyFollow: 'Follow-up: {list}.',
   },
 };
 
@@ -314,7 +330,9 @@ const state = {
   preset: 'week', search: null, seq: 0, searchSeq: 0, busy: false,
   ranges: new Map(), // every period pulled from the API this visit, so sub-periods need no new request
   searchCache: new Map(),
+  follow: new Map(), followOk: null, followAt: 0, followLoading: null, fstatus: '', following: null,
 };
+const FOLLOW_STATUSES = ['open', 'investigating', 'found', 'charged', 'not_lost', 'closed'];
 const PD_MAX_AGE_MS = 5 * 60 * 1000;
 
 // Last default view and pallet data, kept in this browser so the next visit opens instantly.
@@ -436,6 +454,99 @@ async function api(params) {
   const out = await res.json();
   if (!out.ok) throw new Error(out.error || t('apiError'));
   return out;
+}
+
+// Plain form body, so the browser sends it without a CORS preflight; never retried, it appends a row.
+async function apiPost(params) {
+  const res = await fetch(API_URL, { method: 'POST', body: new URLSearchParams(params) });
+  if (!res.ok) throw new Error(t('apiStatus', { s: res.status }));
+  const out = await res.json();
+  if (!out.ok) throw new Error(out.error || t('apiError'));
+  return out;
+}
+
+// Follow-up rows grouped by tote, oldest first: [time, tote, status, note, by, day, wh, branch, value]
+function refreshFollow(force) {
+  if (!API_URL || state.followLoading || (!force && Date.now() - state.followAt < 60 * 1000)) return;
+  state.followLoading = api({ action: 'follow' })
+    .then(out => {
+      // a deployment from before the follow-up answers with range data and no rows
+      state.followOk = Array.isArray(out.rows);
+      if (state.followOk) {
+        const m = new Map();
+        out.rows.forEach(r => { if (!m.has(r[1])) m.set(r[1], []); m.get(r[1]).push(r); });
+        state.follow = m;
+      }
+      state.followAt = Date.now();
+      if (state.data) { renderLost(); renderSearch(); renderReport(); }
+    })
+    .catch(() => { if (state.followOk == null) state.followOk = false; })
+    .finally(() => { state.followLoading = null; });
+}
+
+const followOf = tote => { const h = state.follow.get(tote); return h ? h[h.length - 1] : null; };
+const statusOf = tote => { const f = followOf(tote); return f ? f[2] : 'open'; };
+const stPill = st => `<span class="st ${st}">${t('st_' + st)}</span>`;
+const fuStamp = at => `${at.slice(8, 10)}/${at.slice(5, 7)} ${at.slice(11, 16)}`;
+
+function followCell(r) {
+  const f = followOf(r.awb);
+  let html = stPill(f ? f[2] : 'open');
+  if (f && f[3]) html += `<div class="fu-note">${esc(f[3].length > 90 ? f[3].slice(0, 90) + '…' : f[3])}</div>`;
+  if (f) html += `<div class="fu-by">${esc(f[4])} · ${fuStamp(f[0])}</div>`;
+  if (state.followOk) html += `<button class="link fu-edit" data-follow="${esc(r.awb)}">${t('followEdit')}</button>`;
+  return html;
+}
+
+function openFollow(tote) {
+  let r = state.rows.find(x => x.awb === tote);
+  if (!r && state.search && state.search.out) {
+    const l = (state.search.out.lost || []).find(x => x[0] === tote);
+    if (l) r = { awb: l[0], d: l[5], wh: l[2], ds: l[3], val: l[8], qty: l[6] };
+  }
+  if (!r) return;
+  state.following = r;
+  const f = followOf(tote);
+  const cur = f ? f[2] : 'open';
+  $('fu-title').textContent = t('followTitle', { tote });
+  $('fu-info').innerHTML = `${dm(r.d)} · <span class="ltr">${esc(r.wh)}</span> → ${esc(dsName(r.ds))} · ${pcs(r.qty)} · ${egp(r.val)}`;
+  $('fu-statuses').innerHTML = `<legend>${t('followStatus')}</legend>` + FOLLOW_STATUSES.map(st =>
+    `<label class="fu-st"><input type="radio" name="fu-st" value="${st}" ${st === cur ? 'checked' : ''}>${stPill(st)}</label>`).join('');
+  $('fu-note').value = '';
+  $('fu-note').placeholder = t('followNotePh');
+  $('fu-by').value = store.get('cpo-name') || '';
+  $('fu-msg').textContent = '';
+  $('fu-save').disabled = false;
+  const hist = (state.follow.get(tote) || []).slice().reverse();
+  $('fu-history').innerHTML = `<h4>${t('followHistory')}</h4>` + (hist.length
+    ? hist.map(h => `<div class="fu-h">${stPill(h[2])} <span class="fu-by">${esc(h[4])} · ${fuStamp(h[0])}</span>${h[3] ? `<div class="fu-note">${esc(h[3])}</div>` : ''}</div>`).join('')
+    : `<div class="muted">${t('followNone')}</div>`);
+  $('follow-dlg').showModal();
+}
+
+async function saveFollow(e) {
+  e.preventDefault();
+  const r = state.following;
+  const by = $('fu-by').value.trim();
+  if (!by) { $('fu-msg').textContent = t('followNeedName'); $('fu-by').focus(); return; }
+  store.set('cpo-name', by);
+  const picked = document.querySelector('input[name="fu-st"]:checked');
+  const status = picked ? picked.value : 'open';
+  $('fu-save').disabled = true;
+  $('fu-msg').textContent = t('followSaving');
+  try {
+    const out = await apiPost({ action: 'follow', tote: r.awb, status, note: $('fu-note').value.trim(), by,
+      day: r.d, wh: r.wh, ds: r.ds, value: Math.round(r.val) });
+    if (!state.follow.has(r.awb)) state.follow.set(r.awb, []);
+    state.follow.get(r.awb).push(out.row);
+    $('follow-dlg').close();
+    renderLost();
+    renderSearch();
+    renderReport();
+  } catch (err) {
+    $('fu-msg').textContent = t('followFail', { e: err.message });
+    $('fu-save').disabled = false;
+  }
 }
 
 function parseCSV(text) {
@@ -906,6 +1017,11 @@ function renderLost() {
   fillSelect($('lost-day'), [['', t('allDays')]].concat(days.map(d => [d, dm(d)])), state.day);
   const dss = [...new Set(all.map(r => r.ds))].sort((a, b) => dsName(a).localeCompare(dsName(b)));
   fillSelect($('lost-ds'), [['', t('allDs')]].concat(dss.map(d => [d, dsName(d)])), state.ds);
+  $('lost-follow').hidden = !state.followOk;
+  fillSelect($('lost-follow'), [['', t('followAll')]].concat(FOLLOW_STATUSES.map(st =>
+    [st, `${t('st_' + st)} (${all.filter(r => statusOf(r.awb) === st).length})`])), state.fstatus);
+  $('follow-note').hidden = state.followOk !== false;
+  $('follow-note').textContent = t('followUnsupported');
 
   const rows = filteredLost();
   $('lost-title').textContent = t('lostTitle', { from: dm(state.data.from), to: dm(state.data.to) });
@@ -915,19 +1031,20 @@ function renderLost() {
   const body = CAT_ORDER.map(c => {
     const g = rows.filter(r => r.cat === c).sort((a, b) => b.val - a.val);
     if (!g.length) return '';
-    return `<tr class="lost-group"><td colspan="8"><span class="tag ${c}">${catLabel(c)}</span>${catTitle(c)} <span class="muted">· ${t('totesN', g.length)} · ${egp(sum(g, r => r.val))}</span></td></tr>` +
+    return `<tr class="lost-group"><td colspan="9"><span class="tag ${c}">${catLabel(c)}</span>${catTitle(c)} <span class="muted">· ${t('totesN', g.length)} · ${egp(sum(g, r => r.val))}</span></td></tr>` +
       g.map(r => `<tr><td>${++i}</td><td>${dm(r.d)}</td><td><span class="wh">${esc(r.wh)}</span></td>
         <td><button class="tote mono" data-q="${esc(r.awb)}">${esc(r.awb)}</button></td><td>${esc(dsName(r.ds))}</td>
         <td class="n">${qtyf(r.qty)}</td><td class="n">${money(r.val)}</td>
-        <td>${r.lines.map(l => `<div class="ev"><span class="tag ${l.cat}">${l.tag}</span>${l.html}</div>`).join('')}</td></tr>`).join('');
+        <td>${r.lines.map(l => `<div class="ev"><span class="tag ${l.cat}">${l.tag}</span>${l.html}</div>`).join('')}</td>
+        <td class="fu">${followCell(r)}</td></tr>`).join('');
   }).join('');
   $('lost-table').innerHTML = `<table><thead><tr>${head.map((h, j) => `<th class="${j === 5 || j === 6 ? 'n' : ''}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${body}
-    <tr class="total"><td></td><td colspan="4">${t('total')}</td><td class="n">${qtyf(sum(rows, r => r.qty))}</td><td class="n">${money(sum(rows, r => r.val))}</td><td></td></tr></tbody></table>`;
+    <tr class="total"><td></td><td colspan="4">${t('total')}</td><td class="n">${qtyf(sum(rows, r => r.qty))}</td><td class="n">${money(sum(rows, r => r.val))}</td><td></td><td></td></tr></tbody></table>`;
 }
 
 function filteredLost() {
   return state.rows.filter(r => (!state.wh || r.wh === state.wh) && (!state.cat || r.cat === state.cat) &&
-    (!state.day || r.d === state.day) && (!state.ds || r.ds === state.ds));
+    (!state.day || r.d === state.day) && (!state.ds || r.ds === state.ds) && (!state.fstatus || statusOf(r.awb) === state.fstatus));
 }
 
 function fillSelect(sel, options, value) {
@@ -938,9 +1055,13 @@ function fillSelect(sel, options, value) {
 function downloadCSV() {
   const rows = filteredLost();
   const strip = h => { const d = document.createElement('div'); d.innerHTML = h; return d.textContent; };
-  const head = ['date', 'warehouse', 'tote', 'transfer', 'branch_code', 'branch', 'qty', 'value', 'finding', 'evidence'];
-  const lines = [head].concat(rows.map(r => [r.d, r.wh, r.awb, r.tr, r.ds, dsName(r.ds), r.qty, Math.round(r.val), catLabel(r.cat),
-    r.lines.map(l => `${l.tag}: ${strip(l.html)}`).join(' | ')]));
+  const head = ['date', 'warehouse', 'tote', 'transfer', 'branch_code', 'branch', 'qty', 'value', 'finding', 'evidence',
+    'follow_status', 'follow_note', 'follow_by', 'follow_at'];
+  const lines = [head].concat(rows.map(r => {
+    const f = followOf(r.awb) || [];
+    return [r.d, r.wh, r.awb, r.tr, r.ds, dsName(r.ds), r.qty, Math.round(r.val), catLabel(r.cat),
+      r.lines.map(l => `${l.tag}: ${strip(l.html)}`).join(' | '), t('st_' + (f[2] || 'open')), f[3] || '', f[4] || '', f[0] || ''];
+  }));
   const csv = '﻿' + lines.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -1021,6 +1142,8 @@ function renderReport() {
   if (wh && !state.wh && wh[1][0] > 1) keys.push(t('rpKeyTopWh', { wh: `<bdi><b>${esc(wh[0])}</b></bdi>`, n: t('totesN', wh[1][0]), v: egp(wh[1][1]) }));
   const unreviewed = [...new Set(all.flatMap(r => r.ev.filter(e => e.k === 'not_reviewed').map(e => e.pallet)))];
   if (unreviewed.length) keys.push(t('rpKeyNotReviewed', { n: unreviewed.length, list: unreviewed.map(mono).join(LANG === 'ar' ? '، ' : ', ') }));
+  const followed = FOLLOW_STATUSES.filter(st => st !== 'open').map(st => [st, all.filter(r => statusOf(r.awb) === st).length]).filter(x => x[1]);
+  if (followed.length) keys.push(t('rpKeyFollow', { list: followed.map(([st, n]) => `${t('st_' + st)} ${n}`).join(LANG === 'ar' ? '، ' : ', ') }));
 
   const cols = range ? ['c-n', 'c-d', 'c-wh', 'c-tote', 'c-ds', 'c-q', 'c-v', ''] : ['c-n', 'c-wh', 'c-tote', 'c-ds', 'c-q', 'c-v', ''];
   const headCells = t(range ? 'rpHeadRange' : 'rpHead');
@@ -1032,7 +1155,7 @@ function renderReport() {
     return `<tr class="rp-group"><td colspan="${headCells.length}"><span class="tag ${c}">${catLabel(c)}</span>${catTitle(c)} <span class="muted">· ${t('totesN', g.length)} · ${egp(sum(g, r => r.val))}</span></td></tr>` +
       g.map(r => `<tr><td>${++i}</td>${range ? `<td>${dm(r.d)}</td>` : ''}<td><span class="wh">${esc(r.wh)}</span></td><td>${mono(r.awb)}</td>
         <td>${esc(dsName(r.ds))}</td><td class="n">${qtyf(r.qty)}</td><td class="n">${money(r.val)}</td>
-        <td>${r.lines.map(l => `<div class="ev"><span class="tag ${l.cat}">${l.tag}</span>${l.html}</div>`).join('')}</td></tr>`).join('');
+        <td>${r.lines.map(l => `<div class="ev"><span class="tag ${l.cat}">${l.tag}</span>${l.html}</div>`).join('')}${reportFollow(r)}</td></tr>`).join('');
   }).join('');
   const total = `<tr class="rp-total"><td></td><td colspan="${range ? 4 : 3}">${t('total')}</td><td class="n">${qtyf(sum(shown, r => r.qty))}</td><td class="n">${money(sum(shown, r => r.val))}</td><td></td></tr>`;
   const pulled = utcToCairo(new Date(D.snapshotAt || D.generatedAt).toISOString().slice(0, 19).replace('T', ' ')).label;
@@ -1047,6 +1170,12 @@ function renderReport() {
     <div class="rp-note">${t('rpNote')}</div>
     <div class="rp-foot">${t('rpFoot', { pulled, now })}</div>
   </div></div>`;
+}
+
+function reportFollow(r) {
+  const f = followOf(r.awb);
+  if (!f || f[2] === 'open') return '';
+  return `<div class="ev">${stPill(f[2])}${f[3] ? ' ' + esc(f[3]) : ''} <span class="fu-by">(${esc(f[4])} · ${fuStamp(f[0])})</span></div>`;
 }
 
 function reportFileName() {
@@ -1225,6 +1354,10 @@ function versionBlock(tote, out, ev) {
     facts.push(`<div>${t('fBranchScan', { b: esc(dsName(w[4])), at: utcToCairo(w[1]).label })} <span class="muted">(${ok ? t('scanOk') : esc(w[5] || '—')}${wrong ? ' · ' + t('shouldBe', { b: esc(dsName(w[3])) }) : ''})</span></div>`);
   });
   lost.forEach(r => facts.push(`<div><span class="tag gray">Box Lost</span> ${t('fBoxLost', { pcs: pcs(r[6]), v: egp(r[8]), d: dm(r[5]) })}</div>`));
+  if (lost.length) {
+    const f = followOf(tote);
+    facts.push(`<div>${t('followCol')}: ${stPill(f ? f[2] : 'open')}${f && f[3] ? ` <b>${esc(f[3])}</b>` : ''}${f ? ` <span class="fu-by">${esc(f[4])} · ${fuStamp(f[0])}</span>` : ''}${state.followOk ? ` <button class="link fu-edit" data-follow="${esc(tote)}">${t('followEdit')}</button>` : ''}</div>`);
+  }
 
   const bySku = new Map();
   lines.forEach(l => {
@@ -1402,6 +1535,7 @@ async function load(params, fresh) {
   const seq = ++state.seq;
   if (fresh) { state.ranges.clear(); state.searchCache.clear(); }
   if (fresh || !state.pd || Date.now() - state.pdAt > PD_MAX_AGE_MS) refreshPD();
+  refreshFollow(fresh);
   const have = !fresh && from && to && covering(from, to);
   if (have) {
     if (state.busy) busy(false);
@@ -1488,6 +1622,9 @@ function bind() {
   $('lost-day').addEventListener('change', e => { state.day = e.target.value; renderLost(); });
   $('lost-ds').addEventListener('change', e => { state.ds = e.target.value; renderLost(); });
   $('lost-csv').addEventListener('click', downloadCSV);
+  $('lost-follow').addEventListener('change', e => { state.fstatus = e.target.value; renderLost(); });
+  $('follow-form').addEventListener('submit', saveFollow);
+  $('fu-cancel').addEventListener('click', () => $('follow-dlg').close());
   $('report-btn').addEventListener('click', openReport);
   $('rp-close').addEventListener('click', closeReport);
   $('rp-day').addEventListener('change', e => { state.report.day = e.target.value; renderReport(); });
@@ -1498,6 +1635,8 @@ function bind() {
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('report-overlay').hidden) closeReport(); });
   $('search-form').addEventListener('submit', e => { e.preventDefault(); search($('search').value); });
   document.addEventListener('click', e => {
+    const fu = e.target.closest('button[data-follow]');
+    if (fu) { openFollow(fu.dataset.follow); return; }
     const b = e.target.closest('button.tote[data-q]');
     if (b) {
       if (state.tab !== 'lost') setTab('lost');

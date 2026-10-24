@@ -1,5 +1,6 @@
 /**
- * Read-only web app over the "[WH] Daily CPO EG" sheet for the CPO site.
+ * Web app over the "[WH] Daily CPO EG" sheet for the CPO site. It only reads that sheet; the one
+ * thing it writes is the tote follow-up log, a separate spreadsheet in the owner's Drive.
  *
  * Reading the sheet takes a minute or more, so the script keeps a snapshot of the tabs it needs
  * (a gzipped file in the owner's Drive) and answers every request from it. refreshSnapshot runs
@@ -13,7 +14,9 @@
  *     (no from/to: the last 7 days up to the latest date in the Missing tab)
  * GET ?action=tote&q=TGI64D09XXXXEG_v12              every row for one tote (any version) or transfer (TR-...)
  * GET ?action=status                                 when the snapshot was built and how long each tab took
- * Add &fresh=1 to skip the 10-minute answer cache, &rebuild=1 to read the sheet again first.
+ * GET ?action=follow                                 every follow-up row (status and note per tote)
+ * POST action=follow&tote=&status=&note=&by=&day=&wh=&ds=&value=   adds a follow-up row
+ * Add &fresh=1 to skip the answer cache, &rebuild=1 to read the sheet again first.
  */
 const CPO_SHEET_ID = '1v7iTcS4nE9mxWheZB7Iv-G2zLSGuyfEvripv_oImV4A';
 const SNAPSHOT_NAME = 'CPO site snapshot (used by the CPO site, do not edit)';
@@ -23,6 +26,12 @@ const KEEP_DAYS = 62;
 // Answers are keyed by the snapshot time, so a rebuild retires them; 6 hours is the cache maximum.
 const CACHE_SECONDS = 21600;
 const CACHE_CHUNK = 45000;
+// Follow-up log: leave empty and the script creates "CPO site – tote follow-up" in your Drive on the
+// first save; or paste the id of a spreadsheet you already have.
+const FOLLOW_SHEET_ID = '';
+const FOLLOW_TAB = 'followup';
+const FOLLOW_HEAD = ['Time', 'Tote', 'Status', 'Note', 'By', 'Box Lost day', 'WH', 'Branch', 'Value'];
+const FOLLOW_STATUSES = ['open', 'investigating', 'found', 'charged', 'not_lost', 'closed'];
 
 let book = null;
 let tz = 'Africa/Cairo';
@@ -32,6 +41,7 @@ function doGet(e) {
   const p = (e && e.parameter) || {};
   try {
     const action = p.action || 'range';
+    if (action === 'follow') return json_(JSON.stringify({ ok: true, rows: followRows_() }));
     if (p.rebuild) refreshSnapshot();
     if (action === 'status') return json_(JSON.stringify(status_()));
     const builtAt = PropertiesService.getScriptProperties().getProperty('SNAP_AT') || '';
@@ -41,6 +51,77 @@ function doGet(e) {
     return json_(answer_(action, p.from, p.to, p.q));
   } catch (err) {
     return json_(JSON.stringify({ ok: false, error: String((err && err.message) || err) }));
+  }
+}
+
+function doPost(e) {
+  const p = (e && e.parameter) || {};
+  try {
+    if (p.action !== 'follow') throw new Error('Unknown action');
+    return json_(JSON.stringify({ ok: true, row: addFollow_(p) }));
+  } catch (err) {
+    return json_(JSON.stringify({ ok: false, error: String((err && err.message) || err) }));
+  }
+}
+
+// ---------- tote follow-up ----------
+
+function followSheet_(create) {
+  const props = PropertiesService.getScriptProperties();
+  const id = FOLLOW_SHEET_ID || props.getProperty('FOLLOW_ID');
+  let ss = null;
+  if (id) {
+    try {
+      ss = SpreadsheetApp.openById(id);
+    } catch (err) {
+      ss = null;
+    }
+  }
+  if (!ss) {
+    if (!create) return null;
+    ss = SpreadsheetApp.create('CPO site – tote follow-up');
+    ss.getSheets()[0].setName(FOLLOW_TAB);
+    props.setProperty('FOLLOW_ID', ss.getId());
+  }
+  const sh = ss.getSheetByName(FOLLOW_TAB) || ss.insertSheet(FOLLOW_TAB);
+  if (sh.getLastRow() === 0) {
+    sh.appendRow(FOLLOW_HEAD);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// [time (Cairo), tote, status, note, by, box lost day, wh, branch, value], oldest first
+function followRows_() {
+  const sh = followSheet_(false);
+  if (!sh || sh.getLastRow() < 2) return [];
+  return sh.getRange(2, 1, sh.getLastRow() - 1, FOLLOW_HEAD.length).getValues()
+    .filter(r => str_(r[1]))
+    .map(r => [
+      r[0] instanceof Date ? Utilities.formatDate(r[0], 'Africa/Cairo', 'yyyy-MM-dd HH:mm') : str_(r[0]),
+      str_(r[1]), str_(r[2]), str_(r[3]), str_(r[4]), day_(r[5]), str_(r[6]), str_(r[7]), num_(r[8])]);
+}
+
+function addFollow_(p) {
+  const tote = String(p.tote || '').trim().toUpperCase().replace(/_V(\d+)$/, '_v$1');
+  const status = String(p.status || '').trim();
+  const note = String(p.note || '').trim().slice(0, 1000);
+  const by = String(p.by || '').trim().slice(0, 60);
+  if (!/^[A-Z0-9][A-Za-z0-9_\-]{5,40}$/.test(tote)) throw new Error('Bad tote');
+  if (FOLLOW_STATUSES.indexOf(status) < 0) throw new Error('Bad status');
+  if (!by) throw new Error('Name is required');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30 * 1000);
+  try {
+    const now = new Date();
+    // the apostrophe keeps day and ids as text so the sheet does not turn them into dates or numbers
+    const row = [now, "'" + tote, status, "'" + note, "'" + by, "'" + (isDay_(p.day) ? p.day : ''),
+      "'" + String(p.wh || '').slice(0, 20), "'" + String(p.ds || '').slice(0, 20), num_(p.value)];
+    followSheet_(true).appendRow(row);
+    return [Utilities.formatDate(now, 'Africa/Cairo', 'yyyy-MM-dd HH:mm'), tote, status, note, by,
+      isDay_(p.day) ? p.day : '', String(p.wh || ''), String(p.ds || ''), num_(p.value)];
+  } finally {
+    lock.releaseLock();
   }
 }
 
