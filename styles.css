@@ -333,3 +333,16 @@ body.report-open { overflow: hidden; }
 .fu-history { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 8px; max-height: 220px; overflow: auto; }
 .fu-history h4 { margin: 0 0 6px; font-size: 13.5px; }
 .fu-h + .fu-h { margin-top: 8px; }
+
+/* ---------- one chart per measure ---------- */
+:root { --series-7: #6250d6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --series-7: #9085e9; } }
+:root[data-theme="dark"] { --series-7: #9085e9; }
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.mini { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px 4px; min-width: 0; }
+.mini-head { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.mini-key { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.mini-total { margin-inline-start: auto; font-weight: 800; font-variant-numeric: tabular-nums; }
+.chart .bar-m { transition: opacity .12s; }
+.chart .bar-m.dim { opacity: .4; }
+@media (max-width: 700px) { .charts { grid-template-columns: 1fr; } }

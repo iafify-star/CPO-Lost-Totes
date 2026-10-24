@@ -162,6 +162,7 @@ const I18N = {
     followFail: 'ماتحفظتش: {e}', followHistory: 'اللي اتسجل قبل كدا', followNone: 'لسه محدش سجّل حاجة على التوتة دي.',
     followUnsupported: 'المتابعة محتاجة تحديث الاسكربت (New version) عشان تشتغل.',
     rpKeyFollow: 'المتابعة: {list}.',
+    chartsByDay: 'باليوم', chartsByWh: 'بالمخزن يوم {d}',
   },
   en: {
     docTitle: 'noon Minutes · CPO & Lost Totes',
@@ -305,6 +306,7 @@ const I18N = {
     followFail: 'Not saved: {e}', followHistory: 'History', followNone: 'Nothing recorded for this tote yet.',
     followUnsupported: 'Follow-up needs the updated Apps Script (New version) to work.',
     rpKeyFollow: 'Follow-up: {list}.',
+    chartsByDay: 'By day', chartsByWh: 'By warehouse on {d}',
   },
 };
 
@@ -829,20 +831,28 @@ function renderDash() {
         lastCpo ? t('cpoAvg', { d: dm(lastCpo[0]), v: nf2.format(lastCpo[1]) }) : t('cpoNone')),
   ].join('');
 
-  // trend
-  const byDay = new Map(days.map(d => [d, [0, 0, 0]]));
-  rows.forEach(r => { const a = byDay.get(r[0]); if (a) { a[0] += r[4]; a[1] += r[5]; a[2] += r[6]; } });
-  const series = [
-    { name: 'Missing', color: 'var(--series-1)', values: days.map(d => byDay.get(d)[0]) },
-    { name: 'Damage', color: 'var(--series-2)', values: days.map(d => byDay.get(d)[1]) },
-    { name: 'Excess', color: 'var(--series-3)', values: days.map(d => byDay.get(d)[2]) },
+  // one chart per measure, each on its own scale: by day, or by warehouse when the period is one day
+  const oneDay = days.length === 1;
+  const keys = oneDay ? (wh ? [wh] : WHS) : days;
+  const keyOfRow = r => (oneDay ? r[1] : r[0]);
+  const by = new Map(keys.map(k => [k, [0, 0, 0, 0]]));
+  rows.forEach(r => { const a = by.get(keyOfRow(r)); if (a) { a[0] += r[4]; a[1] += r[5]; a[2] += r[6]; } });
+  lost.forEach(r => { const a = by.get(oneDay ? r[2] : r[5]); if (a) a[3] += r[8]; });
+  const labels = keys.map(k => (oneDay ? k : dm(k)));
+  const charts = [
+    { name: 'Missing', color: 'var(--series-1)', i: 0 },
+    { name: 'Damage', color: 'var(--series-2)', i: 1 },
+    { name: 'Excess', color: 'var(--series-3)', i: 2 },
+    { name: 'Box Lost', color: 'var(--series-7)', i: 3 },
   ];
-  $('trend-legend').innerHTML = series.map(s => `<span><i style="background:${s.color}"></i>${s.name}</span>`).join('');
-  lineChart($('trend'), days, series);
-  $('trend-table').innerHTML = table([t('day'), 'Missing', 'Damage', 'Excess'],
-    days.map(d => [dm(d), ...byDay.get(d).map(money)]), [false, true, true, true]);
+  $('trend-title').textContent = t(oneDay ? 'chartsByWh' : 'chartsByDay', { d: dm(D.from) });
+  $('charts').innerHTML = charts.map(c => `<div class="mini"><div class="mini-head"><span class="mini-key" style="background:${c.color}"></span>
+    <b>${c.name}</b><span class="mini-total">${egp(sum(keys, k => by.get(k)[c.i]))}</span></div><div class="chart" data-chart="${c.i}"></div></div>`).join('');
+  charts.forEach(c => barChart($('charts').querySelector(`[data-chart="${c.i}"]`), labels, keys.map(k => by.get(k)[c.i]), c.color, c.name));
+  $('trend-table').innerHTML = table([t(oneDay ? 'whLabel' : 'day'), ...charts.map(c => c.name)],
+    keys.map((k, j) => [labels[j], ...by.get(k).map(money)]), [false, true, true, true, true]);
   $('trend-table').hidden = !state.trendTable;
-  $('trend').hidden = state.trendTable;
+  $('charts').hidden = state.trendTable;
   $('trend-table-btn').textContent = t(state.trendTable ? 'asChart' : 'asTable');
 
   // by warehouse
@@ -909,60 +919,49 @@ function table(head, rows, numeric, opts = {}) {
   return `<table><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
-function lineChart(el, days, series) {
-  if (days.length < 2) {
-    el.innerHTML = `<div class="empty">${t('pickMoreDays')}</div>`;
-    return;
-  }
-  const W = 900, H = 270, L = 52, R = 104, T = 14, B = 30;
-  const max = Math.max(1, ...series.flatMap(s => s.values));
-  const step = niceStep(max / 4);
+// Column chart for one measure: rounded tops on the baseline, a value on the tallest and the last bar,
+// and a tooltip per column whose hit area is the whole column band.
+function barChart(el, labels, values, color, name) {
+  const W = 460, H = 200, L = 44, R = 10, T = 20, B = 26;
+  const n = labels.length;
+  const max = Math.max(1, ...values);
+  const step = niceStep(max / 3);
   const top = Math.ceil(max / step) * step;
-  const x = i => L + (i * (W - L - R)) / (days.length - 1);
+  const band = (W - L - R) / n;
+  const bw = Math.max(3, Math.min(38, band - 2));
   const y = v => T + (H - T - B) * (1 - v / top);
-  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t('chartAria'))}">`;
-  svg += '<g class="grid">';
+  const y0 = y(0);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(name)}"><g class="grid">`;
   for (let v = 0; v <= top + 1e-6; v += step) {
-    svg += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${compact(v)}</text>`;
+    svg += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${compact(v)}</text>`;
   }
   svg += '</g>';
-  const every = Math.ceil(days.length / 12);
-  days.forEach((d, i) => {
-    if (i % every === 0 || i === days.length - 1) svg += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${dm(d)}</text>`;
-  });
-  series.forEach(s => {
-    const pts = s.values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-    svg += `<polyline points="${pts}" fill="none" style="stroke:${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
-    if (days.length <= 31) {
-      s.values.forEach((v, i) => { svg += `<circle cx="${x(i)}" cy="${y(v)}" r="4" style="fill:${s.color}" stroke="var(--surface)" stroke-width="2"/>`; });
+  const every = Math.ceil(n / 10);
+  const iMax = values.indexOf(Math.max(...values));
+  values.forEach((v, i) => {
+    const x = L + band * i + (band - bw) / 2;
+    const yt = y(v);
+    const r = Math.min(4, bw / 2, y0 - yt);
+    if (v > 0) {
+      svg += `<path class="bar-m" data-i="${i}" d="M${x},${y0} V${yt + r} Q${x},${yt} ${x + r},${yt} H${x + bw - r} Q${x + bw},${yt} ${x + bw},${yt + r} V${y0} Z" style="fill:${color}"/>`;
     }
+    if (i % every === 0 || i === n - 1) svg += `<text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle">${esc(labels[i])}</text>`;
+    if (v > 0 && (i === iMax || i === n - 1)) svg += `<text class="end-label" x="${x + bw / 2}" y="${yt - 5}" text-anchor="middle">${compact(v)}</text>`;
   });
-  // end labels, nudged apart so they never overlap
-  const ends = series.map(s => ({ s, y: y(s.values[s.values.length - 1]) })).sort((a, b) => a.y - b.y);
-  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 15) ends[i].y = ends[i - 1].y + 15;
-  ends.forEach(e => {
-    svg += `<text class="end-label" x="${W - R + 10}" y="${e.y + 4}">${e.s.name} ${compact(e.s.values[e.s.values.length - 1])}</text>`;
-  });
-  svg += `<line class="cross" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/>`;
-  svg += `<rect class="hit" x="${L - 10}" y="0" width="${W - L - R + 20}" height="${H}" fill="transparent"/>`;
-  svg += '</svg>';
+  svg += `<rect class="hit" x="${L}" y="0" width="${W - L - R}" height="${H}" fill="transparent"/></svg>`;
   el.innerHTML = svg;
 
   const svgEl = el.querySelector('svg');
-  const cross = svgEl.querySelector('.cross');
-  const show = evt => {
+  const hit = svgEl.querySelector('.hit');
+  const bars = [...svgEl.querySelectorAll('.bar-m')];
+  hit.addEventListener('pointermove', evt => {
     const box = svgEl.getBoundingClientRect();
     const px = ((evt.clientX - box.left) / box.width) * W;
-    const i = Math.max(0, Math.min(days.length - 1, Math.round(((px - L) / (W - L - R)) * (days.length - 1))));
-    cross.setAttribute('x1', x(i));
-    cross.setAttribute('x2', x(i));
-    cross.setAttribute('visibility', 'visible');
-    tooltip(evt.clientX, evt.clientY, dm(days[i]), series.map(s => [s.name, s.color, egp(s.values[i])]));
-  };
-  const hide = () => { cross.setAttribute('visibility', 'hidden'); tooltip(); };
-  const hit = svgEl.querySelector('.hit');
-  hit.addEventListener('pointermove', show);
-  hit.addEventListener('pointerleave', hide);
+    const i = Math.max(0, Math.min(n - 1, Math.floor((px - L) / band)));
+    bars.forEach(b => b.classList.toggle('dim', Number(b.dataset.i) !== i));
+    tooltip(evt.clientX, evt.clientY, labels[i], [[name, color, egp(values[i])]]);
+  });
+  hit.addEventListener('pointerleave', () => { bars.forEach(b => b.classList.remove('dim')); tooltip(); });
 }
 
 function niceStep(raw) {
