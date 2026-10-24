@@ -128,6 +128,9 @@ const I18N = {
       <li>شغّل installTrigger مرة، وبعدين Deploy ← New deployment ← Web app، و Execute as: Me، و Who has access: Anyone.</li>
       <li>انسخ الرابط اللي آخره <span class="mono">/exec</span> وحطه في <span class="mono">config.js</span>.</li></ol>`,
     apiStatus: 'الـ API رد بـ {s}', apiError: 'الـ API رجّع خطأ', pdStatus: 'pending_dispatching رد بـ {s}',
+    updating: 'بيحدّث…',
+    pdLoading: 'بيحمّل البالتات وسكان الـ Review من pending_dispatching…',
+    searchPartial: 'ده من الفترة المعروضة بس، وبيكمل البحث في الشيت كله…',
   },
   en: {
     docTitle: 'noon Minutes · CPO & Lost Totes',
@@ -237,6 +240,9 @@ const I18N = {
       <li>Run installTrigger once, then Deploy → New deployment → Web app, Execute as: Me, Who has access: Anyone.</li>
       <li>Copy the link ending in <span class="mono">/exec</span> into <span class="mono">config.js</span>.</li></ol>`,
     apiStatus: 'The API answered {s}', apiError: 'The API returned an error', pdStatus: 'pending_dispatching answered {s}',
+    updating: 'updating…',
+    pdLoading: 'Loading pallets and Review scans from pending_dispatching…',
+    searchPartial: 'This is from the period on screen only; searching the whole sheet…',
   },
 };
 
@@ -257,9 +263,53 @@ const catTitle = c => t('cat_' + c + '_t');
 
 const state = {
   tab: location.hash === '#lost' ? 'lost' : 'dash',
-  data: null, pd: null, rows: [],
+  data: null, pd: null, pdRaw: null, pdAt: 0, pdLoading: null, rows: [],
   wh: '', cat: '', day: '', ds: '', dsAll: false, catAll: false, trendTable: false,
-  preset: 'week', search: null,
+  preset: 'week', search: null, seq: 0, searchSeq: 0, busy: false,
+  ranges: new Map(), // every period pulled from the API this visit, so sub-periods need no new request
+  searchCache: new Map(),
+};
+const PD_MAX_AGE_MS = 5 * 60 * 1000;
+
+// Last default view and pallet data, kept in this browser so the next visit opens instantly.
+const idb = {
+  db: null,
+  open() {
+    if (!this.db) {
+      this.db = new Promise((resolve, reject) => {
+        const req = indexedDB.open('cpo-site', 1);
+        req.onupgradeneeded = () => req.result.createObjectStore('kv');
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    return this.db;
+  },
+  async get(key) {
+    try {
+      const db = await this.open();
+      return await new Promise(resolve => {
+        const req = db.transaction('kv').objectStore('kv').get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(undefined);
+      });
+    } catch (err) {
+      return undefined;
+    }
+  },
+  async set(key, value) {
+    try {
+      const db = await this.open();
+      await new Promise(resolve => {
+        const tx = db.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(value, key);
+        tx.oncomplete = resolve;
+        tx.onerror = resolve;
+      });
+    } catch (err) {
+      // storage is only a speed-up
+    }
+  },
 };
 
 // ---------- helpers ----------
@@ -358,14 +408,34 @@ function parseCSV(text) {
   return rows;
 }
 
-async function loadPD() {
+async function loadPDRaw() {
   const get = async gid => {
     const res = await fetchRetry(`https://docs.google.com/spreadsheets/d/${PD_SHEET}/export?format=csv&gid=${gid}&_=${Date.now()}`);
     if (!res.ok) throw new Error(t('pdStatus', { s: res.status }));
     return parseCSV(await res.text());
   };
   const [disp, scans, hist] = await Promise.all([get(PD_TABS.dispatching), get(PD_TABS.scans), get(PD_TABS.history)]);
-  return indexPD(disp, scans, hist);
+  return { disp, scans, hist };
+}
+
+// Pallet data loads beside the API call and never holds up the dashboard.
+function refreshPD() {
+  if (state.pdLoading) return state.pdLoading;
+  state.pdLoading = loadPDRaw()
+    .then(raw => {
+      state.pdRaw = raw;
+      state.pd = indexPD(raw.disp, raw.scans, raw.hist);
+      state.pdAt = Date.now();
+      if (state.data) {
+        state.rows = analyze(state.data.lost, state.data.lines, state.data.wc, state.pd);
+        renderLost();
+        renderSearch();
+      }
+      saveLast();
+    })
+    .catch(err => { if (!state.pd) notice(`<b>${t('loadFail')}</b> ${esc(err.message)}`, 'error'); })
+    .finally(() => { state.pdLoading = null; });
+  return state.pdLoading;
 }
 
 function cols(header, names) {
@@ -771,6 +841,12 @@ function tooltip(cx, cy, title, items) {
 
 // ---------- lost totes ----------
 function renderLost() {
+  if (!state.pd) {
+    $('cats').innerHTML = '';
+    $('lost-title').textContent = t('lostTitle', { from: dm(state.data.from), to: dm(state.data.to) });
+    $('lost-table').innerHTML = `<div class="empty">${t('pdLoading')}</div>`;
+    return;
+  }
   const all = state.rows.filter(r => !state.wh || r.wh === state.wh);
   const card = (cls, on, k, n, v, c) => `<button class="cat ${cls} ${on ? 'on' : ''}" data-cat="${c}"><div class="k">${k}</div><div class="v">${n}</div><div class="s">${v}</div></button>`;
   $('cats').innerHTML = [card('all', !state.cat, t('allTotes'), all.length, egp(sum(all, r => r.val)), '')]
@@ -834,20 +910,51 @@ async function search(q) {
   $('search').value = q;
   if (q.startsWith('FPI')) { state.search = { kind: 'pallet', q }; renderSearch(); return; }
   if (q.length < 6) { box.innerHTML = `<div class="result"><b>${t('searchFail')}</b> ${t('tooShort')}</div>`; return; }
-  box.innerHTML = `<div class="result"><div class="muted">${t('searching')}</div></div>`;
+  const key = q.replace(/_V\d+$/, '');
+  const seq = ++state.searchSeq;
+  if (state.searchCache.has(key)) { state.search = state.searchCache.get(key); renderSearch(); return; }
+  // what the loaded period already knows shows at once; the full search of the sheet replaces it
+  const local = localSearch(q);
+  if (local) { state.search = { kind: local.kind, q, out: local, partial: true }; renderSearch(); }
+  else box.innerHTML = `<div class="result"><div class="muted">${t('searching')}</div></div>`;
   try {
     const out = await api({ action: 'tote', q });
-    state.search = { kind: out.kind, q, out };
+    const found = { kind: out.kind, q, out };
+    state.searchCache.set(key, found);
+    if (seq !== state.searchSeq) return;
+    state.search = found;
     renderSearch();
   } catch (err) {
+    if (seq !== state.searchSeq) return;
     box.innerHTML = `<div class="result"><b>${t('searchFail')}</b> ${esc(err.message)}</div>`;
   }
+}
+
+function localSearch(q) {
+  const D = state.data;
+  if (!D) return null;
+  const isTransfer = q.startsWith('TR-');
+  const b = q.replace(/_V\d+$/, '');
+  const hit = v => {
+    const s = String(v || '').toUpperCase();
+    return isTransfer ? s === q || s.startsWith(q + '/') : s === b || s.startsWith(b + '_V');
+  };
+  const out = {
+    q: isTransfer ? q : b, kind: isTransfer ? 'transfer' : 'tote',
+    lost: D.lost.filter(r => hit(isTransfer ? r[1] : r[0])),
+    lines: D.lines.filter(r => hit(isTransfer ? r[0] : r[1])),
+    wc: isTransfer ? [] : D.wc.filter(r => hit(r[0])),
+    mtd: [],
+  };
+  return out.lost.length || out.lines.length || out.wc.length ? out : null;
 }
 
 function renderSearch() {
   const s = state.search;
   if (!s) { $('search-result').innerHTML = ''; return; }
-  $('search-result').innerHTML = s.kind === 'pallet' ? palletView(s.q) : s.kind === 'transfer' ? transferView(s.out) : toteView(s.out);
+  if (!state.pd) { $('search-result').innerHTML = `<div class="result"><div class="muted">${t('pdLoading')}</div></div>`; return; }
+  const view = s.kind === 'pallet' ? palletView(s.q) : s.kind === 'transfer' ? transferView(s.out) : toteView(s.out);
+  $('search-result').innerHTML = view + (s.partial ? `<div class="hint">${t('searchPartial')}</div>` : '');
 }
 
 function resultShell(title, inner) {
@@ -1002,13 +1109,19 @@ function setTab(tab) {
   history.replaceState(null, '', location.pathname + location.search + (tab === 'lost' ? '#lost' : ''));
 }
 
+function metaText() {
+  const D = state.data;
+  if (!D) return t('loadingData');
+  const pulled = utcToCairo(new Date(D.snapshotAt || D.generatedAt).toISOString().slice(0, 19).replace('T', ' ')).label;
+  return t('metaLine', {
+    from: dm(D.from), to: dm(D.to), latest: dm(D.latest), upd: D.updated ? t('metaUpd', { d: dm(D.updated) }) : '', pulled,
+  }) + (state.busy ? ' · ' + t('updating') : '');
+}
+
 function render() {
   if (!state.data) return;
   const D = state.data;
-  const pulled = utcToCairo(new Date(D.snapshotAt || D.generatedAt).toISOString().slice(0, 19).replace('T', ' ')).label;
-  $('meta').textContent = t('metaLine', {
-    from: dm(D.from), to: dm(D.to), latest: dm(D.latest), upd: D.updated ? t('metaUpd', { d: dm(D.updated) }) : '', pulled,
-  });
+  $('meta').textContent = metaText();
   $('from').value = D.from;
   $('to').value = D.to;
   $('from').max = $('to').max = D.latest;
@@ -1017,31 +1130,113 @@ function render() {
   renderLost();
 }
 
+function setData(data) {
+  if (!state.data) performance.mark('cpo-first-data');
+  state.data = data;
+  state.rows = state.pd ? analyze(data.lost, data.lines, data.wc, state.pd) : [];
+  render();
+}
+
+function busy(on, fresh) {
+  state.busy = on;
+  document.querySelector('main').classList.toggle('loading', on);
+  ['apply', 'refresh'].forEach(id => { $(id).disabled = on; });
+  $('meta').textContent = on && fresh ? t('loadingRebuild') : metaText();
+}
+
+// Periods from the same snapshot only: an hourly rebuild makes the older ones stale.
+function remember(data) {
+  state.ranges.forEach((d, k) => { if (d.snapshotAt !== data.snapshotAt) state.ranges.delete(k); });
+  state.ranges.set(data.from + '|' + data.to, data);
+}
+
+function covering(from, to) {
+  let best = null;
+  state.ranges.forEach(d => {
+    if (d.from <= from && to <= d.to && (!best || d.summary.length < best.summary.length)) best = d;
+  });
+  return best;
+}
+
+// A period inside a loaded one, cut on the spot with the same windows the Apps Script uses.
+function derive(D, from, to) {
+  const lo = shift(from, -1), hi = shift(to, 2);
+  const wcLo = shift(from, -2), wcHi = shift(to, 3);
+  const lost = D.lost.filter(r => r[5] >= from && r[5] <= to);
+  const lostSet = new Set(lost.map(r => r[0]));
+  return {
+    ...D, from, to, lost,
+    summary: D.summary.filter(r => r[0] >= from && r[0] <= to),
+    buckets: D.buckets.filter(r => r[0] >= from && r[0] <= to),
+    lines: D.lines.filter(r => lostSet.has(r[1]) || (r[10] > 0 && r[2] >= lo && r[2] <= hi)),
+    wc: D.wc.filter(r => r[6] >= wcLo && r[6] <= wcHi),
+  };
+}
+
+function saveLast() {
+  const D = state.ranges.get(state.defaultKey || '');
+  if (D) idb.set('last|' + API_URL, { data: D, pd: state.pdRaw, savedAt: Date.now() });
+}
+
 async function load(params, fresh) {
   if (!API_URL) {
     notice(t('setup'));
     $('meta').textContent = t('waitingApi');
     return;
   }
-  document.querySelector('main').classList.add('loading');
-  $('meta').textContent = t(fresh ? 'loadingRebuild' : 'loadingData');
-  ['apply', 'refresh'].forEach(id => { $(id).disabled = true; });
+  const from = params.from || '', to = params.to || '';
+  const seq = ++state.seq;
+  if (fresh) { state.ranges.clear(); state.searchCache.clear(); }
+  if (fresh || !state.pd || Date.now() - state.pdAt > PD_MAX_AGE_MS) refreshPD();
+  const have = !fresh && from && to && covering(from, to);
+  if (have) {
+    if (state.busy) busy(false);
+    setData(derive(have, from, to));
+    return;
+  }
+  busy(true, fresh);
   try {
     const q = { action: 'range', ...params };
     if (fresh) { q.fresh = 1; q.rebuild = 1; }
-    const [data, pd] = await Promise.all([api(q), state.pd && !fresh ? state.pd : loadPD()]);
-    state.data = data;
-    state.pd = pd;
-    state.rows = analyze(data.lost, data.lines, data.wc, pd);
+    const data = await api(q);
+    remember(data);
+    if (!from && !to) { state.defaultKey = data.from + '|' + data.to; saveLast(); }
+    if (seq !== state.seq) return;
     notice('');
-    render();
+    setData(data);
+    prefetchMonth();
   } catch (err) {
+    if (seq !== state.seq) return;
     notice(`<b>${t('loadFail')}</b> ${esc(err.message)}`, 'error');
-    $('meta').textContent = t('errorMeta');
+    if (!state.data) $('meta').textContent = t('errorMeta');
   } finally {
-    document.querySelector('main').classList.remove('loading');
-    ['apply', 'refresh'].forEach(id => { $(id).disabled = false; });
+    if (seq === state.seq) busy(false);
   }
+}
+
+// Month to date covers every preset, so after the first view it loads quietly in the background.
+function prefetchMonth() {
+  const latest = state.data && state.data.latest;
+  if (!latest || state.prefetching) return;
+  const from = latest.slice(0, 8) + '01';
+  if (covering(from, latest)) return;
+  state.prefetching = api({ action: 'range', from, to: latest })
+    .then(remember)
+    .catch(() => {})
+    .finally(() => { state.prefetching = null; });
+}
+
+// Opens on the last view saved in this browser, then refreshes it.
+async function boot() {
+  const last = API_URL ? await idb.get('last|' + API_URL) : null;
+  if (last && last.data && !state.data) {
+    if (last.pd) {
+      state.pdRaw = last.pd;
+      state.pd = indexPD(last.pd.disp, last.pd.scans, last.pd.hist);
+    }
+    setData(last.data);
+  }
+  load({});
 }
 
 function presetRange(p) {
@@ -1095,4 +1290,4 @@ function bind() {
 applyLang();
 bind();
 setTab(state.tab);
-load({});
+boot();

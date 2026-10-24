@@ -20,7 +20,8 @@ const SNAPSHOT_NAME = 'CPO site snapshot (used by the CPO site, do not edit)';
 const SNAPSHOT_MAX_AGE_MS = 3 * 60 * 60 * 1000;
 // Keeps the snapshot file under Drive's 10 MB limit for text content as the tabs grow
 const KEEP_DAYS = 62;
-const CACHE_SECONDS = 600;
+// Answers are keyed by the snapshot time, so a rebuild retires them; 6 hours is the cache maximum.
+const CACHE_SECONDS = 21600;
 const CACHE_CHUNK = 45000;
 
 let book = null;
@@ -34,19 +35,36 @@ function doGet(e) {
     if (p.rebuild) refreshSnapshot();
     if (action === 'status') return json_(JSON.stringify(status_()));
     const builtAt = PropertiesService.getScriptProperties().getProperty('SNAP_AT') || '';
-    const key = ['cpo2', builtAt, action, p.from || '', p.to || '', String(p.q || '').trim().toUpperCase()].join('|');
+    const key = answerKey_(builtAt, action, p.from, p.to, p.q);
     const hit = p.fresh ? null : cacheGet_(key);
     if (hit) return json_(hit);
-    const out = action === 'tote' ? searchTote_(p.q) : rangeData_(p.from, p.to);
-    out.ok = true;
-    out.generatedAt = new Date().toISOString();
-    out.snapshotAt = snapshot_().builtAt;
-    const text = JSON.stringify(out);
-    cachePut_(key, text);
-    return json_(text);
+    return json_(answer_(action, p.from, p.to, p.q));
   } catch (err) {
     return json_(JSON.stringify({ ok: false, error: String((err && err.message) || err) }));
   }
+}
+
+function answerKey_(builtAt, action, from, to, q) {
+  return ['cpo3', builtAt, action, from || '', to || '', String(q || '').trim().toUpperCase()].join('|');
+}
+
+function answer_(action, from, to, q) {
+  const s = snapshot_();
+  const out = action === 'tote' ? searchTote_(q) : rangeData_(from, to);
+  out.ok = true;
+  out.generatedAt = new Date().toISOString();
+  out.snapshotAt = s.builtAt;
+  const text = JSON.stringify(out);
+  cachePut_(answerKey_(s.builtAt, action, from, to, q), text);
+  return text;
+}
+
+// The site's opening view and its presets, answered once right after each rebuild.
+function warmPresets_() {
+  const latest = snapshot_().latest;
+  if (!latest) return;
+  [['', ''], [latest, latest], [shift_(latest, -6), latest], [latest.slice(0, 8) + '01', latest]]
+    .forEach(r => answer_('range', r[0], r[1], ''));
 }
 
 // ---------- snapshot ----------
@@ -67,6 +85,7 @@ function refreshSnapshot() {
   } finally {
     lock.releaseLock();
   }
+  warmPresets_();
   return snap.builtAt;
 }
 
