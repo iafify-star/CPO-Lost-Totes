@@ -110,7 +110,9 @@ function addFollow_(p) {
   if (!/^[A-Z0-9][A-Za-z0-9_\-]{5,40}$/.test(tote)) throw new Error('Bad tote');
   if (FOLLOW_STATUSES.indexOf(status) < 0) throw new Error('Bad status');
   if (!by) throw new Error('Name is required');
-  const lock = LockService.getScriptLock();
+  // Not the script lock: the hourly rebuild holds that for two minutes. appendRow is atomic, so this
+  // lock only keeps two first saves from each creating a follow-up spreadsheet.
+  const lock = LockService.getUserLock();
   lock.waitLock(30 * 1000);
   try {
     const now = new Date();
