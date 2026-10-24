@@ -52,7 +52,7 @@ const I18N = {
     egpBig: '{n}<small> ج</small>',
     pcs: n => (n === 1 ? 'قطعة' : n === 2 ? 'قطعتين' : n <= 10 ? `${n} قطع` : `${n} قطعة`),
     totes: n => (n === 1 ? 'توتة' : n === 2 ? 'توتتين' : n <= 10 ? `${n} توتات` : `${n} توتة`),
-    totesN: n => `${n} توتة`,
+    totesN: n => (+n === 1 ? 'توتة واحدة' : +n === 2 ? 'توتتين' : +n <= 10 ? `${n} توتات` : `${n} توتة`),
     piecesN: n => `${n} قطعة`,
     kMissing: 'الـ Missing (Transfer Loss)', kDamage: 'الـ Damage', kExcess: 'الـ Excess',
     kBoxLost: 'Box Lost (توتة كاملة)', kWc: 'Wrong Connection', kCpo: 'CPO',
@@ -131,6 +131,29 @@ const I18N = {
     updating: 'بيحدّث…',
     pdLoading: 'بيحمّل البالتات وسكان الـ Review من pending_dispatching…',
     searchPartial: 'ده من الفترة المعروضة بس، وبيكمل البحث في الشيت كله…',
+    reportBtn: 'تقرير اليوم', rpDay: 'اليوم', rpEvidenceOnly: 'اللي عليها دليل بس',
+    rpPng: 'صورة PNG', rpCopy: 'نسخ الصورة', rpPdf: 'PDF', rpClose: 'قفل',
+    rpWholePeriod: 'الفترة كلها ({from} – {to})',
+    rpMaking: 'بيعمل الصورة…', rpCopied: 'الصورة اتنسخت، الزقها في الواتساب أو الإيميل', rpSaved: 'الصورة اتحملت',
+    rpFail: 'مقدرتش أعمل الصورة: {e}', rpCopyFail: 'المتصفح مارضيش ينسخ الصورة، استخدم صورة PNG',
+    rpTitleDay: 'التوتات اللي ضاعت بالكامل (Box Lost) يوم {d}: لقينا إيه',
+    rpTitleRange: 'التوتات اللي ضاعت بالكامل (Box Lost) من {from} لـ {to}: لقينا إيه',
+    rpSub: 'التوتات المسجلة Box Lost في تاب Tote Missing في شيت [WH] Daily CPO EG، وجنب كل توتة الدليل اللي لقيناه في pending_dispatching وتاب Wrong Connection وتاب Missing. المواعيد بتوقيت القاهرة.',
+    rpSubWh: ' المخزن: {wh}.', rpSubEvidence: ' التقرير فيه التوتات اللي عليها دليل بس.',
+    rpKeys: 'الخلاصة',
+    rpKeyEvidence: '{n} من {t} ({v} من {tv}، يعني {p}%) عليها دليل إنها خرجت من المخزن أو وصلت فرع.',
+    rpKeyRed: '{n} راحت فرع غلط أو أصنافها اتلقت في فرع تاني ({v}).',
+    rpKeyAmber: '{n} وصلت فرعها بس الفرع سجّل عليها Excess، يعني الأصناف اللي جواها اتبدلت ({v}).',
+    rpKeyBlue: '{n} اتسكنت في فرعها والسكان فشل ({v}).',
+    rpKeyTopDs: 'أكتر فرع: {ds}، {n} ({v}).',
+    rpKeyTopWh: 'أكتر مخزن: {wh}، {n} ({v}).',
+    rpKeyNotReviewed: '{n} بالتة محدش عملها Review خالص: {list}.',
+    rpNote: '<b>إزاي نقرا الأدلة:</b> التوتة اللي اتسكنت في الـ Review كانت على البالتة الصح جوه المخزن. والتوتة اللي اتسكنت في فرع (تاب Wrong Connection) كانت موجودة فيه فعلاً حتى لو السكان فشل. والفرع مابيقدرش يسجّل Excess على توتة إلا لو التوتة قدامه، فـ"Box Lost" معناها إن كل الأصناف المطلوبة ناقصة، مش لازم التوتة نفسها تكون ضاعت. ولو نفس التوتة ظهرت تاني برقم <span class="mono">_vNN</span> أعلى يبقى رجعت المخزن.',
+    rpFoot: '<b>المصادر:</b> شيت [WH] Daily CPO EG (تاب Tote Missing وتاب Missing وتاب Wrong Connection)، وشيت pending_dispatching (تاب pallet_scan وتاب dispatching وتاب dispatching_history). الداتا من الشيت {pulled}، والتقرير اتعمل {now}.',
+    rpNone: 'مفيش توتات Box Lost في اليوم ده.',
+    rpHead: ['#', 'CAIID', 'التوتة', 'رايحة فين', 'القطع', 'القيمة (ج)', 'لقينا إيه'],
+    rpHeadRange: ['#', 'اليوم', 'CAIID', 'التوتة', 'رايحة فين', 'القطع', 'القيمة (ج)', 'لقينا إيه'],
+    months: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'],
   },
   en: {
     docTitle: 'noon Minutes · CPO & Lost Totes',
@@ -243,6 +266,29 @@ const I18N = {
     updating: 'updating…',
     pdLoading: 'Loading pallets and Review scans from pending_dispatching…',
     searchPartial: 'This is from the period on screen only; searching the whole sheet…',
+    reportBtn: 'Day report', rpDay: 'Day', rpEvidenceOnly: 'Only totes with evidence',
+    rpPng: 'PNG image', rpCopy: 'Copy image', rpPdf: 'PDF', rpClose: 'Close',
+    rpWholePeriod: 'Whole period ({from} – {to})',
+    rpMaking: 'Making the image…', rpCopied: 'Image copied, paste it in WhatsApp or email', rpSaved: 'Image downloaded',
+    rpFail: 'Could not make the image: {e}', rpCopyFail: 'The browser would not copy the image; use PNG image',
+    rpTitleDay: 'Box Lost totes on {d}: what we found',
+    rpTitleRange: 'Box Lost totes, {from} to {to}: what we found',
+    rpSub: 'Totes recorded as Box Lost in the Tote Missing tab of [WH] Daily CPO EG, each with the evidence found in pending_dispatching, the Wrong Connection tab and the Missing tab. Times are Cairo time.',
+    rpSubWh: ' Warehouse: {wh}.', rpSubEvidence: ' Only totes with evidence are listed.',
+    rpKeys: 'Summary',
+    rpKeyEvidence: '{n} of {t} ({v} of {tv}, {p}%) have evidence that they left the warehouse or reached a branch.',
+    rpKeyRed: '{n} went to the wrong branch or their items turned up at another branch ({v}).',
+    rpKeyAmber: '{n} reached their branch, but the branch booked excess on them, so the items inside were swapped ({v}).',
+    rpKeyBlue: '{n} were scanned at their branch and the scan failed ({v}).',
+    rpKeyTopDs: 'Branch with the most: {ds}, {n} ({v}).',
+    rpKeyTopWh: 'Warehouse with the most: {wh}, {n} ({v}).',
+    rpKeyNotReviewed: '{n} pallets were never reviewed: {list}.',
+    rpNote: '<b>How to read the evidence:</b> a tote scanned at Review was on the right pallet inside the warehouse. A tote scanned at a branch (Wrong Connection tab) was physically there, even when the scan failed. A branch can only book excess on a tote it has in hand, so "Box Lost" means every item ordered is missing; the tote itself may not be lost. A higher <span class="mono">_vNN</span> later means the tote came back to the warehouse.',
+    rpFoot: '<b>Sources:</b> [WH] Daily CPO EG (Tote Missing, Missing and Wrong Connection tabs) and pending_dispatching (pallet_scan, dispatching and dispatching_history tabs). Data pulled from the sheet {pulled}; report made {now}.',
+    rpNone: 'No Box Lost totes on this day.',
+    rpHead: ['#', 'CAIID', 'Tote', 'Going to', 'Pieces', 'Value (EGP)', 'What we found'],
+    rpHeadRange: ['#', 'Day', 'CAIID', 'Tote', 'Going to', 'Pieces', 'Value (EGP)', 'What we found'],
+    months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   },
 };
 
@@ -430,6 +476,7 @@ function refreshPD() {
         state.rows = analyze(state.data.lost, state.data.lines, state.data.wc, state.pd);
         renderLost();
         renderSearch();
+        renderReport();
       }
       saveLast();
     })
@@ -902,6 +949,172 @@ function downloadCSV() {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+// ---------- day report ----------
+const IMAGE_LIB = 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js';
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dayLong = d => `${Number(d.slice(8, 10))} ${t('months')[Number(d.slice(5, 7)) - 1]}`;
+const dayTag = d => `${Number(d.slice(8, 10))}${MONTHS_EN[Number(d.slice(5, 7)) - 1]}`;
+
+function openReport() {
+  if (!state.data || !state.pd) return;
+  const days = [...new Set(state.rows.map(r => r.d))].sort();
+  state.report = { day: state.day || days[days.length - 1] || '', evidenceOnly: state.report ? state.report.evidenceOnly : false };
+  $('report-overlay').hidden = false;
+  document.body.classList.add('report-open');
+  $('rp-status').textContent = '';
+  renderReport();
+}
+
+function closeReport() {
+  $('report-overlay').hidden = true;
+  document.body.classList.remove('report-open');
+}
+
+function reportRows() {
+  const day = state.report.day;
+  return state.rows.filter(r => (!state.wh || r.wh === state.wh) && (!day || r.d === day));
+}
+
+function renderReport() {
+  if ($('report-overlay').hidden || !state.report) return;
+  const D = state.data;
+  const rp = state.report;
+  const days = [...new Set(state.rows.map(r => r.d))].sort();
+  if (rp.day && !days.includes(rp.day)) rp.day = days[days.length - 1] || '';
+  fillSelect($('rp-day'), [['', t('rpWholePeriod', { from: dm(D.from), to: dm(D.to) })]].concat(days.map(d => [d, dayLong(d)])), rp.day);
+  $('rp-evidence').checked = rp.evidenceOnly;
+
+  const all = reportRows();
+  const shown = rp.evidenceOnly ? all.filter(r => r.cat !== 'gray') : all;
+  const range = !rp.day;
+  const title = range ? t('rpTitleRange', { from: dayLong(D.from), to: dayLong(D.to) }) : t('rpTitleDay', { d: dayLong(rp.day) });
+  const sub = t('rpSub') + (state.wh ? t('rpSubWh', { wh: state.wh }) : '') + (rp.evidenceOnly ? t('rpSubEvidence') : '');
+  const head = `<div class="rp-head"><img src="assets/noon-minutes.png" alt="noon Minutes"><div class="rp-titles"><h1>${esc(title)}</h1><div class="rp-sub">${esc(sub)}</div></div></div>`;
+  if (!all.length) {
+    $('report').innerHTML = `<div class="rp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}" lang="${LANG}">${head}<div class="rp-empty">${t('rpNone')}</div></div>`;
+    return;
+  }
+
+  const card = (cls, k, list) => `<div class="rp-card ${cls}"><div class="k">${k}</div><div class="v">${list.length}</div><div class="s">${egp(sum(list, r => r.val))}</div></div>`;
+  const cards = [card('all', t('allTotes'), all)].concat(CAT_ORDER
+    .filter(c => all.some(r => r.cat === c) && !(rp.evidenceOnly && c === 'gray'))
+    .map(c => card(c, catLabel(c), all.filter(r => r.cat === c)))).join('');
+
+  // summary lines, worked out from every tote of the day (not only the ones listed)
+  const keys = [];
+  const withEv = all.filter(r => r.cat !== 'gray');
+  const totV = sum(all, r => r.val), evV = sum(withEv, r => r.val);
+  keys.push(t('rpKeyEvidence', { n: t('totesN', withEv.length), t: all.length, v: egp(evV), tv: egp(totV), p: totV ? Math.round((evV / totV) * 100) : 0 }));
+  [['red', 'rpKeyRed'], ['amber', 'rpKeyAmber'], ['blue', 'rpKeyBlue']].forEach(([c, k]) => {
+    const g = all.filter(r => r.cat === c);
+    if (g.length) keys.push(t(k, { n: t('totesN', g.length), v: egp(sum(g, r => r.val)) }));
+  });
+  const top = keyOf => {
+    const m = new Map();
+    all.forEach(r => { const a = m.get(keyOf(r)) || [0, 0]; a[0] += 1; a[1] += r.val; m.set(keyOf(r), a); });
+    return [...m.entries()].sort((a, b) => b[1][0] - a[1][0] || b[1][1] - a[1][1])[0];
+  };
+  const ds = top(r => r.ds);
+  // bdi keeps an English branch name from pulling the Arabic comma and count around it
+  if (ds && ds[1][0] > 1) keys.push(t('rpKeyTopDs', { ds: `<bdi><b>${esc(dsName(ds[0]))}</b></bdi>`, n: t('totesN', ds[1][0]), v: egp(ds[1][1]) }));
+  const wh = top(r => r.wh);
+  if (wh && !state.wh && wh[1][0] > 1) keys.push(t('rpKeyTopWh', { wh: `<bdi><b>${esc(wh[0])}</b></bdi>`, n: t('totesN', wh[1][0]), v: egp(wh[1][1]) }));
+  const unreviewed = [...new Set(all.flatMap(r => r.ev.filter(e => e.k === 'not_reviewed').map(e => e.pallet)))];
+  if (unreviewed.length) keys.push(t('rpKeyNotReviewed', { n: unreviewed.length, list: unreviewed.map(mono).join(LANG === 'ar' ? '، ' : ', ') }));
+
+  const cols = range ? ['c-n', 'c-d', 'c-wh', 'c-tote', 'c-ds', 'c-q', 'c-v', ''] : ['c-n', 'c-wh', 'c-tote', 'c-ds', 'c-q', 'c-v', ''];
+  const headCells = t(range ? 'rpHeadRange' : 'rpHead');
+  const numCol = i => i === headCells.length - 3 || i === headCells.length - 2;
+  let i = 0;
+  const body = CAT_ORDER.map(c => {
+    const g = shown.filter(r => r.cat === c).sort((a, b) => b.val - a.val);
+    if (!g.length) return '';
+    return `<tr class="rp-group"><td colspan="${headCells.length}"><span class="tag ${c}">${catLabel(c)}</span>${catTitle(c)} <span class="muted">· ${t('totesN', g.length)} · ${egp(sum(g, r => r.val))}</span></td></tr>` +
+      g.map(r => `<tr><td>${++i}</td>${range ? `<td>${dm(r.d)}</td>` : ''}<td><span class="wh">${esc(r.wh)}</span></td><td>${mono(r.awb)}</td>
+        <td>${esc(dsName(r.ds))}</td><td class="n">${qtyf(r.qty)}</td><td class="n">${money(r.val)}</td>
+        <td>${r.lines.map(l => `<div class="ev"><span class="tag ${l.cat}">${l.tag}</span>${l.html}</div>`).join('')}</td></tr>`).join('');
+  }).join('');
+  const total = `<tr class="rp-total"><td></td><td colspan="${range ? 4 : 3}">${t('total')}</td><td class="n">${qtyf(sum(shown, r => r.qty))}</td><td class="n">${money(sum(shown, r => r.val))}</td><td></td></tr>`;
+  const pulled = utcToCairo(new Date(D.snapshotAt || D.generatedAt).toISOString().slice(0, 19).replace('T', ' ')).label;
+  const now = utcToCairo(new Date().toISOString().slice(0, 19).replace('T', ' ')).label;
+
+  $('report').innerHTML = `<div class="rp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}" lang="${LANG}">${head}<div class="rp-body">
+    <div class="rp-cards">${cards}</div>
+    <div class="rp-keys"><h3>${t('rpKeys')}</h3><ul>${keys.map(k => `<li>${k}</li>`).join('')}</ul></div>
+    <table><colgroup>${cols.map(c => `<col class="${c}">`).join('')}</colgroup>
+      <thead><tr>${headCells.map((h, j) => `<th class="${numCol(j) ? 'n' : ''}">${esc(h)}</th>`).join('')}</tr></thead>
+      <tbody>${body}${total}</tbody></table>
+    <div class="rp-note">${t('rpNote')}</div>
+    <div class="rp-foot">${t('rpFoot', { pulled, now })}</div>
+  </div></div>`;
+}
+
+function reportFileName() {
+  const D = state.data;
+  const day = state.report.day;
+  const span = day ? dayTag(day)
+    : D.from.slice(0, 7) === D.to.slice(0, 7) ? `${Number(D.from.slice(8, 10))}-${dayTag(D.to)}` : `${dayTag(D.from)}-${dayTag(D.to)}`;
+  return `Full_Tote_Missing_${span}${state.wh ? '_' + state.wh : ''}${LANG === 'ar' ? '_AR' : ''}`;
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error(src));
+    document.head.appendChild(s);
+  });
+}
+
+async function reportBlob() {
+  if (!window.htmlToImage) await loadScript(IMAGE_LIB);
+  const node = $('report').firstElementChild;
+  // Chrome caps a canvas side at about 16k pixels, so long reports export at a lower scale
+  const ratio = Math.max(1, Math.min(2, 16000 / node.offsetHeight));
+  return window.htmlToImage.toBlob(node, { pixelRatio: ratio, backgroundColor: '#ffffff', skipFonts: true, cacheBust: true });
+}
+
+async function reportPng() {
+  $('rp-status').textContent = t('rpMaking');
+  try {
+    const blob = await reportBlob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = reportFileName() + '.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    $('rp-status').textContent = t('rpSaved');
+  } catch (err) {
+    $('rp-status').textContent = t('rpFail', { e: err.message || err });
+  }
+}
+
+async function reportCopy() {
+  $('rp-status').textContent = t('rpMaking');
+  try {
+    if (!navigator.clipboard || !window.ClipboardItem) throw new Error('clipboard');
+    // the item takes the promise so the copy stays tied to the click
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': reportBlob() })]);
+    $('rp-status').textContent = t('rpCopied');
+  } catch (err) {
+    $('rp-status').textContent = t('rpCopyFail');
+  }
+}
+
+function reportPdf() {
+  const title = document.title;
+  document.title = reportFileName();
+  document.body.classList.add('printing');
+  const done = () => {
+    document.body.classList.remove('printing');
+    document.title = title;
+    window.removeEventListener('afterprint', done);
+  };
+  window.addEventListener('afterprint', done);
+  window.print();
+}
+
 // ---------- search ----------
 async function search(q) {
   q = String(q || '').trim().toUpperCase();
@@ -1128,6 +1341,7 @@ function render() {
   document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', b.dataset.preset === state.preset));
   renderDash();
   renderLost();
+  renderReport();
 }
 
 function setData(data) {
@@ -1274,6 +1488,14 @@ function bind() {
   $('lost-day').addEventListener('change', e => { state.day = e.target.value; renderLost(); });
   $('lost-ds').addEventListener('change', e => { state.ds = e.target.value; renderLost(); });
   $('lost-csv').addEventListener('click', downloadCSV);
+  $('report-btn').addEventListener('click', openReport);
+  $('rp-close').addEventListener('click', closeReport);
+  $('rp-day').addEventListener('change', e => { state.report.day = e.target.value; renderReport(); });
+  $('rp-evidence').addEventListener('change', e => { state.report.evidenceOnly = e.target.checked; renderReport(); });
+  $('rp-png').addEventListener('click', reportPng);
+  $('rp-copy').addEventListener('click', reportCopy);
+  $('rp-pdf').addEventListener('click', reportPdf);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('report-overlay').hidden) closeReport(); });
   $('search-form').addEventListener('submit', e => { e.preventDefault(); search($('search').value); });
   document.addEventListener('click', e => {
     const b = e.target.closest('button.tote[data-q]');

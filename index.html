@@ -101,6 +101,7 @@
           <select id="lost-day"></select>
           <select id="lost-ds"></select>
           <button id="lost-csv" data-i18n="csv">تحميل CSV</button>
+          <button id="report-btn" class="primary" data-i18n="reportBtn">تقرير اليوم</button>
         </div>
       </div>
       <div class="scroll" id="lost-table"></div>
@@ -116,6 +117,20 @@
 <footer class="foot" data-i18n="footer"></footer>
 
 <div class="tooltip" id="tooltip" role="status" hidden></div>
+
+<div id="report-overlay" class="report-overlay" hidden>
+  <div class="rp-toolbar">
+    <label><span data-i18n="rpDay">اليوم</span> <select id="rp-day"></select></label>
+    <label class="rp-check"><input type="checkbox" id="rp-evidence"> <span data-i18n="rpEvidenceOnly">اللي عليها دليل بس</span></label>
+    <span class="rp-spacer"></span>
+    <button class="primary" id="rp-png" data-i18n="rpPng">صورة PNG</button>
+    <button id="rp-copy" data-i18n="rpCopy">نسخ الصورة</button>
+    <button id="rp-pdf" data-i18n="rpPdf">PDF</button>
+    <button id="rp-close" data-i18n="rpClose">قفل</button>
+    <span class="rp-status" id="rp-status" role="status"></span>
+  </div>
+  <div class="rp-stage"><div id="report"></div></div>
+</div>
 
 <script src="config.js"></script>
 <script src="app.js"></script>
