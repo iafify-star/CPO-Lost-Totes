@@ -163,7 +163,9 @@ const I18N = {
     followUnsupported: 'المتابعة محتاجة تحديث الاسكربت (New version) عشان تشتغل.',
     rpKeyFollow: 'المتابعة: {list}.',
     chartsByDay: 'باليوم', chartsByWh: 'بالمخزن يوم {d}',
-    vsPrev: '{arrow} {p}% عن اللي قبلها', prevLoading: 'بيحمّل الفترة اللي قبلها…',
+    vsPrev: '{arrow} {p}% في القيمة عن {prev}', vsPrevPlain: '{arrow} {p}% عن {prev}',
+    vsPrevCount: 'العدد: {n} مقابل {m} {prev}', prevDay: 'اليوم اللي قبله', prevDays: 'الـ {n} أيام اللي قبلها',
+    prevLoading: 'بيحمّل الفترة اللي قبلها…',
     heatTitle: 'الفروع × الأيام',
   },
   en: {
@@ -309,7 +311,9 @@ const I18N = {
     followUnsupported: 'Follow-up needs the updated Apps Script (New version) to work.',
     rpKeyFollow: 'Follow-up: {list}.',
     chartsByDay: 'By day', chartsByWh: 'By warehouse on {d}',
-    vsPrev: '{arrow} {p}% vs previous', prevLoading: 'Loading the previous period…',
+    vsPrev: '{arrow} {p}% in value vs {prev}', vsPrevPlain: '{arrow} {p}% vs {prev}',
+    vsPrevCount: 'Count: {n} vs {m} {prev}', prevDay: 'the day before', prevDays: 'the previous {n} days',
+    prevLoading: 'Loading the previous period…',
     heatTitle: 'Branches × days',
   },
 };
@@ -827,14 +831,19 @@ function renderDash() {
   const cur = periodMetrics(D, D.from, D.to, wh);
   const prev = prevData();
   const old = prev ? periodMetrics(prev, prev.from, prev.to, wh) : null;
+  const n = days.length;
+  const prevWord = n === 1 ? t('prevDay') : t('prevDays', { n });
+  const COUNT_OF = { lv: 'ln', wv: 'wn' };
   const delta = key => {
     if (!old) return `<div class="delta muted">${state.prevLoading ? t('prevLoading') : ''}</div>`;
     const a = cur[key], b = old[key];
-    if (!b) return '<div class="delta muted">—</div>';
+    const count = COUNT_OF[key] ? `<div class="delta-n">${t('vsPrevCount', { n: cur[COUNT_OF[key]], m: old[COUNT_OF[key]], prev: prevWord })}</div>` : '';
+    if (!b) return `<div class="delta muted">—</div>${count}`;
     const p = Math.round(((a - b) / b) * 100);
     // more loss is worse, so up is red and down is green; the arrow and the words carry it without colour
     const cls = p > 0 ? 'up' : p < 0 ? 'down' : 'flat';
-    return `<div class="delta ${cls}">${t('vsPrev', { arrow: p > 0 ? '▲' : p < 0 ? '▼' : '■', p: Math.abs(p) })}</div>`;
+    const words = t(key === 'cpo' ? 'vsPrevPlain' : 'vsPrev', { arrow: p > 0 ? '▲' : p < 0 ? '▼' : '■', p: Math.abs(p), prev: prevWord });
+    return `<div class="delta ${cls}">${words}</div>${count}`;
   };
   const spark = key => (days.length > 1 ? sparkline(days.map(d => cur.daily.get(d)[key])) : '');
   const kpi = (cls, k, v, s, key) => `<div class="kpi ${cls}"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div>${key ? delta(key) + spark(key) : ''}</div>`;
@@ -924,22 +933,22 @@ function renderDash() {
 
 // Totals and per-day values of the KPI tiles for one period of a loaded data set.
 function periodMetrics(D, from, to, wh) {
-  const daily = new Map(daysBetween(from, to).map(d => [d, { m: 0, dm: 0, ex: 0, lv: 0, wv: 0, cpo: 0 }]));
+  const daily = new Map(daysBetween(from, to).map(d => [d, { m: 0, dm: 0, ex: 0, lv: 0, ln: 0, wv: 0, wn: 0, cpo: 0 }]));
   D.summary.forEach(r => {
     const a = daily.get(r[0]);
     if (a && (!wh || r[1] === wh)) { a.m += r[4]; a.dm += r[5]; a.ex += r[6]; }
   });
-  D.lost.forEach(r => { const a = daily.get(r[5]); if (a && (!wh || r[2] === wh)) a.lv += r[8]; });
+  D.lost.forEach(r => { const a = daily.get(r[5]); if (a && (!wh || r[2] === wh)) { a.lv += r[8]; a.ln += 1; } });
   const wcTotes = new Map();
   D.wc.forEach(w => {
     if (!daily.has(w[6]) || String(w[7]).toUpperCase() !== 'YES' || (wh && w[2] !== wh)) return;
     wcTotes.set(w[0], [w[6], Math.max((wcTotes.get(w[0]) || [])[1] || 0, w[8] || 0)]);
   });
-  wcTotes.forEach(([d, v]) => { daily.get(d).wv += v; });
+  wcTotes.forEach(([d, v]) => { daily.get(d).wv += v; daily.get(d).wn += 1; });
   const cpo = D.cpo.filter(c => daily.has(c[0]));
   cpo.forEach(c => { daily.get(c[0]).cpo = c[1]; });
   const out = { daily, cpo: cpo.length ? sum(cpo, c => c[1]) / cpo.length : 0 };
-  ['m', 'dm', 'ex', 'lv', 'wv'].forEach(k => { out[k] = sum([...daily.values()], a => a[k]); });
+  ['m', 'dm', 'ex', 'lv', 'ln', 'wv', 'wn'].forEach(k => { out[k] = sum([...daily.values()], a => a[k]); });
   return out;
 }
 
