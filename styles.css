@@ -346,3 +346,31 @@ body.report-open { overflow: hidden; }
 .chart .bar-m { transition: opacity .12s; }
 .chart .bar-m.dim { opacity: .4; }
 @media (max-width: 700px) { .charts { grid-template-columns: 1fr; } }
+
+/* ---------- KPI change and sparkline, branch × day heatmap ---------- */
+.kpi { position: relative; }
+.delta { font-size: 12px; font-weight: 700; margin-top: 4px; }
+.delta.up { color: var(--red); }
+.delta.down { color: var(--green); }
+.delta.flat { color: var(--muted); }
+.kpi.lead .delta.up { color: #ff8a80; }
+.kpi.lead .delta.down { color: #7ee2a8; }
+.spark { display: block; width: 100%; height: 26px; margin-top: 4px; overflow: visible; }
+.spark polyline { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.spark circle { fill: var(--series-1); }
+.kpi.lead .spark polyline { stroke: var(--brand-yellow); }
+.kpi.lead .spark circle { fill: var(--brand-yellow); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; gap: 2px; }
+.seg button { border: 0; padding: 4px 12px; }
+.seg button.on { background: var(--brand-black); color: var(--brand-yellow); }
+table.heat { border-collapse: separate; border-spacing: 2px; }
+table.heat th { border: 0; font-size: 11.5px; padding: 4px; }
+table.heat th.hc { text-align: center; }
+table.heat td { border: 0; padding: 0; }
+table.heat td.hn { padding: 4px 8px; white-space: nowrap; font-weight: 600; font-size: 12.5px; }
+table.heat td.hx { min-width: 38px; height: 28px; border-radius: 4px; text-align: center; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+table.heat td.zero { background: var(--surface-2); }
+table.heat td.n { padding: 4px 8px; }
+.heat-key { display: flex; align-items: center; gap: 2px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
+.heat-key i { width: 22px; height: 10px; border-radius: 2px; display: inline-block; }
+.heat-key span { margin: 0 6px; }

@@ -163,6 +163,8 @@ const I18N = {
     followUnsupported: 'المتابعة محتاجة تحديث الاسكربت (New version) عشان تشتغل.',
     rpKeyFollow: 'المتابعة: {list}.',
     chartsByDay: 'باليوم', chartsByWh: 'بالمخزن يوم {d}',
+    vsPrev: '{arrow} {p}% عن اللي قبلها', prevLoading: 'بيحمّل الفترة اللي قبلها…',
+    heatTitle: 'الفروع × الأيام',
   },
   en: {
     docTitle: 'noon Minutes · CPO & Lost Totes',
@@ -307,6 +309,8 @@ const I18N = {
     followUnsupported: 'Follow-up needs the updated Apps Script (New version) to work.',
     rpKeyFollow: 'Follow-up: {list}.',
     chartsByDay: 'By day', chartsByWh: 'By warehouse on {d}',
+    vsPrev: '{arrow} {p}% vs previous', prevLoading: 'Loading the previous period…',
+    heatTitle: 'Branches × days',
   },
 };
 
@@ -819,17 +823,32 @@ function renderDash() {
   const cpo = D.cpo.filter(c => inRange(c[0])).sort((a, b) => (a[0] < b[0] ? -1 : 1));
   const lastCpo = cpo[cpo.length - 1];
 
-  const kpi = (cls, k, v, s) => `<div class="kpi ${cls}"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+  // each tile: value, change against the period of the same length just before, and a daily sparkline
+  const cur = periodMetrics(D, D.from, D.to, wh);
+  const prev = prevData();
+  const old = prev ? periodMetrics(prev, prev.from, prev.to, wh) : null;
+  const delta = key => {
+    if (!old) return `<div class="delta muted">${state.prevLoading ? t('prevLoading') : ''}</div>`;
+    const a = cur[key], b = old[key];
+    if (!b) return '<div class="delta muted">—</div>';
+    const p = Math.round(((a - b) / b) * 100);
+    // more loss is worse, so up is red and down is green; the arrow and the words carry it without colour
+    const cls = p > 0 ? 'up' : p < 0 ? 'down' : 'flat';
+    return `<div class="delta ${cls}">${t('vsPrev', { arrow: p > 0 ? '▲' : p < 0 ? '▼' : '■', p: Math.abs(p) })}</div>`;
+  };
+  const spark = key => (days.length > 1 ? sparkline(days.map(d => cur.daily.get(d)[key])) : '');
+  const kpi = (cls, k, v, s, key) => `<div class="kpi ${cls}"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div>${key ? delta(key) + spark(key) : ''}</div>`;
   $('kpis').innerHTML = [
-    kpi('lead', t('kMissing'), egpBig(tot.m), `${t('piecesN', qtyf(tot.mq))} · ${t('totesN', nf0.format(sum(allB, r => r[5])))}`),
-    kpi('', t('kDamage'), egpBig(tot.dm), t('piecesN', qtyf(sum(rows, r => r[8])))),
-    kpi('', t('kExcess'), egpBig(tot.ex), tot.m ? t('ofMissing', { p: nf0.format((tot.ex / tot.m) * 100) }) : ''),
-    kpi('', t('kBoxLost'), t('totesN', lost.length), egp(sum(lost, r => r[8]))),
-    kpi('', t('kWc'), t('totesN', wcTotes.size), egp(sum([...wcTotes.values()]))),
+    kpi('lead', t('kMissing'), egpBig(tot.m), `${t('piecesN', qtyf(tot.mq))} · ${t('totesN', nf0.format(sum(allB, r => r[5])))}`, 'm'),
+    kpi('', t('kDamage'), egpBig(tot.dm), t('piecesN', qtyf(sum(rows, r => r[8]))), 'dm'),
+    kpi('', t('kExcess'), egpBig(tot.ex), tot.m ? t('ofMissing', { p: nf0.format((tot.ex / tot.m) * 100) }) : '', 'ex'),
+    kpi('', t('kBoxLost'), t('totesN', lost.length), egp(sum(lost, r => r[8])), 'lv'),
+    kpi('', t('kWc'), t('totesN', wcTotes.size), egp(sum([...wcTotes.values()])), 'wv'),
     wh ? kpi('', t('kCpo'), '—', t('cpoNoWh'))
       : kpi('', t('kCpo'), cpo.length ? nf2.format(sum(cpo, c => c[1]) / cpo.length) : '—',
-        lastCpo ? t('cpoAvg', { d: dm(lastCpo[0]), v: nf2.format(lastCpo[1]) }) : t('cpoNone')),
+        lastCpo ? t('cpoAvg', { d: dm(lastCpo[0]), v: nf2.format(lastCpo[1]) }) : t('cpoNone'), cpo.length ? 'cpo' : ''),
   ].join('');
+  renderHeat(rows, lost, days);
 
   // one chart per measure, each on its own scale: by day, or by warehouse when the period is one day
   const oneDay = days.length === 1;
@@ -901,6 +920,85 @@ function renderDash() {
     (state.catAll ? cat : cat.slice(0, 12)).map(([k, a]) => [esc(k), money(a[0]), barHtml(a[0], catMax), money(a[1]), money(a[2])]),
     [false, true, false, true, true], { raw: true });
   $('cat-more').textContent = state.catAll ? t('showTop') : t('showAll', { n: cat.length });
+}
+
+// Totals and per-day values of the KPI tiles for one period of a loaded data set.
+function periodMetrics(D, from, to, wh) {
+  const daily = new Map(daysBetween(from, to).map(d => [d, { m: 0, dm: 0, ex: 0, lv: 0, wv: 0, cpo: 0 }]));
+  D.summary.forEach(r => {
+    const a = daily.get(r[0]);
+    if (a && (!wh || r[1] === wh)) { a.m += r[4]; a.dm += r[5]; a.ex += r[6]; }
+  });
+  D.lost.forEach(r => { const a = daily.get(r[5]); if (a && (!wh || r[2] === wh)) a.lv += r[8]; });
+  const wcTotes = new Map();
+  D.wc.forEach(w => {
+    if (!daily.has(w[6]) || String(w[7]).toUpperCase() !== 'YES' || (wh && w[2] !== wh)) return;
+    wcTotes.set(w[0], [w[6], Math.max((wcTotes.get(w[0]) || [])[1] || 0, w[8] || 0)]);
+  });
+  wcTotes.forEach(([d, v]) => { daily.get(d).wv += v; });
+  const cpo = D.cpo.filter(c => daily.has(c[0]));
+  cpo.forEach(c => { daily.get(c[0]).cpo = c[1]; });
+  const out = { daily, cpo: cpo.length ? sum(cpo, c => c[1]) / cpo.length : 0 };
+  ['m', 'dm', 'ex', 'lv', 'wv'].forEach(k => { out[k] = sum([...daily.values()], a => a[k]); });
+  return out;
+}
+
+// The period of the same length right before the one on screen: cut from loaded data, or pulled once.
+function prevData() {
+  const D = state.data;
+  const n = daysBetween(D.from, D.to).length;
+  const from = shift(D.from, -n), to = shift(D.from, -1);
+  const have = covering(from, to);
+  if (have) return derive(have, from, to);
+  const key = from + '|' + to;
+  if (!state.prevLoading && state.prevMiss !== key && API_URL) {
+    state.prevLoading = true;
+    api({ action: 'range', from, to })
+      .then(remember)
+      .catch(() => { state.prevMiss = key; })
+      .finally(() => { state.prevLoading = false; if (state.data) renderDash(); });
+  }
+  return null;
+}
+
+function sparkline(values) {
+  const W = 120, H = 26, max = Math.max(...values), min = Math.min(...values);
+  const x = i => (i * W) / (values.length - 1);
+  const y = v => (max === min ? H / 2 : 2 + (H - 4) * (1 - (v - min) / (max - min)));
+  const pts = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const last = values.length - 1;
+  return `<svg class="spark" viewBox="-3 0 ${W + 6} ${H}" aria-hidden="true"><polyline points="${pts}"/><circle cx="${x(last)}" cy="${y(values[last])}" r="2.5"/></svg>`;
+}
+
+const HEAT_RAMP = ['#cde2fb', '#b7d3f6', '#9ec5f4', '#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#104281'];
+
+// Branches down, days across: where the loss sits and whether it repeats.
+function renderHeat(rows, lost, days) {
+  $('heat-card').hidden = days.length < 2;
+  if (days.length < 2) return;
+  const metric = state.heat || 'm';
+  document.querySelectorAll('#heat-metric button').forEach(b => b.classList.toggle('on', b.dataset.heat === metric));
+  const cell = new Map();
+  const add = (ds, d, v) => { const k = ds + '|' + d; cell.set(k, (cell.get(k) || 0) + v); };
+  if (metric === 'lost') lost.forEach(r => add(r[3], r[5], 1));
+  else rows.forEach(r => add(r[2], r[0], r[4]));
+  const totals = new Map();
+  cell.forEach((v, k) => { const ds = k.split('|')[0]; totals.set(ds, (totals.get(ds) || 0) + v); });
+  const top = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15);
+  if (!top.length) { $('heat').innerHTML = `<div class="empty">${t('noData')}</div>`; return; }
+  const max = Math.max(...cell.values());
+  const fmt = v => (metric === 'lost' ? String(v) : compact(v));
+  const showText = days.length <= 16;
+  const head = `<tr><th>${t('dsHead')[0]}</th>${days.map(d => `<th class="hc">${dm(d)}</th>`).join('')}<th class="n">${t('total')}</th></tr>`;
+  const body = top.map(([ds, total]) => `<tr><td class="hn" title="${esc(ds)}">${esc(dsName(ds))}</td>${days.map(d => {
+    const v = cell.get(ds + '|' + d) || 0;
+    if (!v) return '<td class="hx zero"></td>';
+    const step = Math.min(HEAT_RAMP.length - 1, Math.floor((v / max) * HEAT_RAMP.length));
+    const tip = `${dsName(ds)} · ${dm(d)} · ${metric === 'lost' ? t('totesN', v) : egp(v)}`;
+    return `<td class="hx" style="background:${HEAT_RAMP[step]};color:${step >= 4 ? '#fff' : '#0d2a4f'}" title="${esc(tip)}">${showText ? fmt(v) : ''}</td>`;
+  }).join('')}<td class="n"><b>${metric === 'lost' ? total : money(total)}</b></td></tr>`).join('');
+  $('heat').innerHTML = `<table class="heat"><thead>${head}</thead><tbody>${body}</tbody></table>
+    <div class="heat-key"><span>${metric === 'lost' ? '1' : compact(0)}</span>${HEAT_RAMP.map(c => `<i style="background:${c}"></i>`).join('')}<span>${fmt(max)}</span></div>`;
 }
 
 function barHtml(v, max) {
@@ -1609,6 +1707,7 @@ function bind() {
   });
   $('refresh').addEventListener('click', () => load(state.data ? { from: state.data.from, to: state.data.to } : {}, true));
   $('wh').addEventListener('change', e => { state.wh = e.target.value; if (state.data) { renderDash(); renderLost(); } });
+  $('heat-metric').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { state.heat = b.dataset.heat; renderDash(); } });
   $('trend-table-btn').addEventListener('click', () => { state.trendTable = !state.trendTable; renderDash(); });
   $('ds-more').addEventListener('click', () => { state.dsAll = !state.dsAll; renderDash(); });
   $('cat-more').addEventListener('click', () => { state.catAll = !state.catAll; renderDash(); });
